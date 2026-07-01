@@ -1,4 +1,4 @@
-# =============================================================
+﻿# =============================================================
 #  ĐÓNG GÓI BẢN PHÁT HÀNH (auto-update qua Velopack)
 #  Chạy:  .\release.ps1 -Version 1.0.0
 #  Lần sau ra bản mới: tăng số, ví dụ  .\release.ps1 -Version 1.0.1
@@ -6,6 +6,10 @@
 param(
     [Parameter(Mandatory = $true)] [string]$Version
 )
+
+# Ép UTF-8 để tiếng Việt không vỡ: console output + tham số truyền cho vpk (tên shortcut trên máy khách)
+chcp 65001 > $null
+$OutputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 $ErrorActionPreference = "Stop"
 $Root      = $PSScriptRoot
