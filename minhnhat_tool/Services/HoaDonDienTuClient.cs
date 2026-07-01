@@ -122,6 +122,25 @@ namespace minhnhat_tool.Services
             return resp.IsSuccessStatusCode ? await resp.Content.ReadAsStringAsync() : "";
         }
 
+        /// <summary>Hóa đơn liên quan (relative) -> JSON array. Rỗng nếu không có.</summary>
+        public Task<string> GetRelativeAsync(string token, HoaDonInfo hd)
+            => GetInvoicesSubAsync(token, hd, "relative");
+
+        /// <summary>Thông tin liên quan (related) -> JSON. Rỗng nếu không có.</summary>
+        public Task<string> GetRelatedAsync(string token, HoaDonInfo hd)
+            => GetInvoicesSubAsync(token, hd, "related");
+
+        private async Task<string> GetInvoicesSubAsync(string token, HoaDonInfo hd, string kind)
+        {
+            string url = $"{HDDT}/query/invoices/{kind}" +
+                         $"?nbmst={Uri.EscapeDataString(hd.Nbmst)}&khmshdon={Uri.EscapeDataString(hd.Khmshdon)}" +
+                         $"&khhdon={Uri.EscapeDataString(hd.Khhdon)}&shdon={Uri.EscapeDataString(hd.Shdon)}";
+            var req = new HttpRequestMessage(HttpMethod.Get, url);
+            req.Headers.Add("Authorization", "Bearer " + token);
+            var resp = await http.SendAsync(req);
+            return resp.IsSuccessStatusCode ? await resp.Content.ReadAsStringAsync() : "";
+        }
+
         /// <summary>Tải XML gốc (có chữ ký số) của 1 hóa đơn -> bytes.</summary>
         public async Task<byte[]> ExportXmlAsync(string token, HoaDonInfo hd)
         {

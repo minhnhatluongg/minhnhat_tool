@@ -235,7 +235,8 @@ namespace minhnhat_tool
                                 "MST người bán/xuất hàng","Tên người bán/xuất hàng","MST người mua/nhận hàng","Tên người mua/nhận hàng",
                                 "Địa chỉ người mua","Tổng tiền chưa thuế","Tổng tiền thuế","Tổng tiền chiết khấu thương mại",
                                 "Tổng tiền phí","Tổng tiền thanh toán","Đơn vị tiền tệ","Tỷ giá","Trạng thái hóa đơn","Kết quả kiểm tra hóa đơn",
-                                "Nhà cung cấp HĐĐT","Link tra cứu","Thông tin tra cứu" };
+                                "Nhà cung cấp HĐĐT","Link tra cứu","Thông tin tra cứu",
+                                "Hóa đơn liên quan","Thông tin liên quan" };
 
                 // Tiêu đề giống file thuế
                 string tuN = dpTuNgay.SelectedDate?.ToString("dd/MM/yyyy") ?? "";
@@ -251,7 +252,8 @@ namespace minhnhat_tool
                 for (int c = 0; c < hT.Length; c++) wsT.Cell(headRowT, c + 1).Value = hT[c];
 
                 var wsC = wb.AddWorksheet("ChiTiet");
-                string[] hC = { "Ký hiệu","Số HĐ","STT","Tên hàng hóa, dịch vụ","ĐVT","Số lượng","Đơn giá","Thuế suất","Thành tiền" };
+                string[] hC = { "Ký hiệu","Số HĐ","STT","Tên hàng hóa, dịch vụ","ĐVT","Số lượng","Đơn giá (chưa thuế)",
+                                "Tỷ lệ CK (%)","Tiền chiết khấu","Thành tiền chưa thuế","Thuế suất","Tiền thuế","Thành tiền sau thuế" };
                 for (int c = 0; c < hC.Length; c++) wsC.Cell(1, c + 1).Value = hC[c];
 
                 int rT = headRowT + 1, rC = 2, i = 0;
@@ -259,7 +261,7 @@ namespace minhnhat_tool
                 {
                     i++;
                     var hd = row.Raw!;
-                    string nccCol = "", linkCol = "", maCol = "";
+                    string nccCol = "", linkCol = "", maCol = "", hdLienQuanCol = "", ttLienQuanCol = "";
 
                     if (canDetail)
                     {
@@ -286,20 +288,33 @@ namespace minhnhat_tool
                                 if (r.TryGetProperty("hdhhdvu", out var arr) && arr.ValueKind == JsonValueKind.Array)
                                     foreach (var it in arr.EnumerateArray())
                                     {
-                                        wsC.Cell(rC, 1).Value = hd.Khhdon;
-                                        wsC.Cell(rC, 2).Value = hd.Shdon;
-                                        wsC.Cell(rC, 3).Value = ExS(it, "stt");
-                                        wsC.Cell(rC, 4).Value = ExS(it, "ten");
-                                        wsC.Cell(rC, 5).Value = ExS(it, "dvtinh");
-                                        wsC.Cell(rC, 6).Value = ExD(it, "sluong");
-                                        wsC.Cell(rC, 7).Value = ExD(it, "dgia");
-                                        wsC.Cell(rC, 8).Value = ExS(it, "ltsuat");
-                                        wsC.Cell(rC, 9).Value = ExD(it, "thtien");
+                                        double thtien = ExD(it, "thtien");        // thành tiền chưa thuế
+                                        double tsuat  = ExD(it, "tsuat");          // thuế suất dạng số (0.08)
+                                        double tthue  = ExD(it, "tthue");          // tiền thuế/dòng (hay null)
+                                        if (tthue <= 0) tthue = Math.Round(thtien * tsuat, 0);  // null -> tự tính
+                                        wsC.Cell(rC, 1).Value  = hd.Khhdon;
+                                        wsC.Cell(rC, 2).Value  = hd.Shdon;
+                                        wsC.Cell(rC, 3).Value  = ExS(it, "stt");
+                                        wsC.Cell(rC, 4).Value  = ExS(it, "ten");
+                                        wsC.Cell(rC, 5).Value  = ExS(it, "dvtinh");
+                                        wsC.Cell(rC, 6).Value  = ExD(it, "sluong");
+                                        wsC.Cell(rC, 7).Value  = ExD(it, "dgia");        // đơn giá chưa thuế
+                                        wsC.Cell(rC, 8).Value  = ExD(it, "tlckhau");     // tỷ lệ chiết khấu %
+                                        wsC.Cell(rC, 9).Value  = ExD(it, "stckhau");     // tiền chiết khấu
+                                        wsC.Cell(rC, 10).Value = thtien;                 // thành tiền chưa thuế
+                                        wsC.Cell(rC, 11).Value = ExS(it, "ltsuat");      // thuế suất "8%"
+                                        wsC.Cell(rC, 12).Value = tthue;                  // tiền thuế
+                                        wsC.Cell(rC, 13).Value = thtien + tthue;         // thành tiền sau thuế
                                         rC++;
                                     }
                             }
                         }
                         catch { }
+
+                        // Hóa đơn liên quan + Thông tin liên quan (thường rỗng, chỉ có khi HĐ bị điều chỉnh/thay thế/sai sót)
+                        try { hdLienQuanCol = TomTatLienQuan(await _tct.GetRelativeAsync(_token, hd)); } catch { }
+                        try { ttLienQuanCol = TomTatLienQuan(await _tct.GetRelatedAsync(_token, hd)); } catch { }
+
                         await Task.Delay(200);   // giãn cách để không bị TCT chặn
                     }
 
@@ -325,6 +340,8 @@ namespace minhnhat_tool
                     wsT.Cell(rT, 20).Value = nccCol;
                     wsT.Cell(rT, 21).Value = linkCol;
                     wsT.Cell(rT, 22).Value = maCol;
+                    wsT.Cell(rT, 23).Value = hdLienQuanCol;
+                    wsT.Cell(rT, 24).Value = ttLienQuanCol;
                     rT++;
                 }
 
@@ -344,6 +361,34 @@ namespace minhnhat_tool
                : "";
         private static double ExD(JsonElement e, string n)
             => e.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDouble() : 0;
+
+        // Tóm tắt hóa đơn/thông tin liên quan -> 1 chuỗi ngắn cho ô Excel (thường rỗng)
+        private static string TomTatLienQuan(string json)
+        {
+            if (string.IsNullOrWhiteSpace(json)) return "";
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+                JsonElement arr;
+                if (root.ValueKind == JsonValueKind.Array) arr = root;
+                else if (root.ValueKind == JsonValueKind.Object &&
+                         root.TryGetProperty("datas", out var d) && d.ValueKind == JsonValueKind.Array) arr = d;
+                else return "";
+
+                var items = new List<string>();
+                foreach (var el in arr.EnumerateArray())
+                {
+                    string kh = ExS(el, "khhdon"), sh = ExS(el, "shdon");
+                    string s = string.IsNullOrEmpty(kh) ? sh : (string.IsNullOrEmpty(sh) ? kh : $"{kh}-{sh}");
+                    if (!string.IsNullOrEmpty(s)) items.Add(s);
+                }
+                if (items.Count > 0) return string.Join("; ", items);
+                int n = arr.GetArrayLength();
+                return n > 0 ? $"{n} mục" : "";
+            }
+            catch { return ""; }
+        }
 
         // Định dạng sheet giống file thuế: header vàng, viền, freeze dòng tiêu đề
         private static void StyleSheet(ClosedXML.Excel.IXLWorksheet ws, int headerRow, int cols)
