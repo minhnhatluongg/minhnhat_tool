@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="minhnhat_tool/minhnhat_tool.csproj" />
+  <Project Path="minhnhat_worker/minhnhat_worker.csproj" />
+</Solution>

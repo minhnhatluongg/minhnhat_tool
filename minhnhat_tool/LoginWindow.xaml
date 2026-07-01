@@ -1,0 +1,62 @@
+<Window x:Class="minhnhat_tool.LoginWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Đăng nhập hệ thống hóa đơn" Height="540" Width="440"
+        WindowStartupLocation="CenterScreen" ResizeMode="NoResize" Background="#0b0f1a">
+
+    <Window.Resources>
+        <Style x:Key="BtnPrimary" TargetType="Button">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Background" Value="#16a34a"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="10">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Opacity" Value="0.9"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="bd" Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Border Background="#111827" CornerRadius="16" Margin="28" Padding="30" VerticalAlignment="Center">
+            <StackPanel>
+                <TextBlock Text="📄" FontSize="40" HorizontalAlignment="Center"/>
+                <TextBlock Text="PHẦN MỀM HÓA ĐƠN" FontSize="20" FontWeight="Bold"
+                           Foreground="#22d3ee" HorizontalAlignment="Center" Margin="0,6,0,2"/>
+                <TextBlock Text="Đăng nhập hệ thống hoá đơn điện tử" FontSize="12"
+                           Foreground="#94a3b8" HorizontalAlignment="Center" Margin="0,0,0,24"/>
+
+                <TextBlock Text="Mã số thuế" Foreground="#94a3b8" FontSize="12" Margin="0,0,0,4"/>
+                <TextBox x:Name="txtMst" Height="42" FontSize="14" Padding="10,0"
+                         Background="#0f172a" Foreground="White" BorderBrush="#334155"
+                         VerticalContentAlignment="Center"/>
+
+                <TextBlock Text="Mật khẩu (hoadondientu.gdt.gov.vn)" Foreground="#94a3b8" FontSize="12" Margin="0,14,0,4"/>
+                <PasswordBox x:Name="txtPassword" Height="42" FontSize="14" Padding="10,0"
+                             Background="#0f172a" Foreground="White" BorderBrush="#334155"
+                             VerticalContentAlignment="Center"/>
+
+                <Button x:Name="btnLogin" Content="Đăng nhập" Height="44" Margin="0,24,0,0"
+                        FontSize="15" Style="{StaticResource BtnPrimary}"
+                        IsDefault="True" Click="btnLogin_Click"/>
+
+                <TextBlock x:Name="txtStatus" Text="🔒 Captcha được giải tự động qua CaptchaService"
+                           Foreground="#64748b" FontSize="11" TextWrapping="Wrap"
+                           HorizontalAlignment="Center" TextAlignment="Center" Margin="0,16,0,0"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>
