@@ -150,6 +150,7 @@ namespace minhnhat_tool
             {
                 foreach (var r in rows)
                 {
+                    if (Cancelled) break;
                     i++;
                     SetProgress(i, rows.Count, $"Kiểm tra {i}/{rows.Count} đối tác...");
                     string mst = _lastIsMuaVao ? (r.Raw?.Nbmst ?? "") : (r.Raw?.Nmmst ?? "");
@@ -169,9 +170,10 @@ namespace minhnhat_tool
                     if (info.risk) risky++;
                 }
                 grdHoaDon.Items.Refresh();
+                string prefix = Cancelled ? $"Đã HỦY (kiểm tra {i}/{rows.Count}). " : "Đã kiểm tra xong. ";
                 MessageBox.Show(risky == 0
-                    ? "Đã kiểm tra xong. Không phát hiện đối tác rủi ro."
-                    : $"⚠ Phát hiện {risky} hóa đơn có đối tác RỦI RO (không ở trạng thái 'đang hoạt động').\nCác dòng đã được tô đỏ.",
+                    ? prefix + "Không phát hiện đối tác rủi ro."
+                    : prefix + $"⚠ Phát hiện {risky} hóa đơn có đối tác RỦI RO (không ở trạng thái 'đang hoạt động').\nCác dòng đã được tô đỏ.",
                     "Kết quả kiểm tra rủi ro");
             }
             catch (Exception ex) { MessageBox.Show("Lỗi kiểm tra rủi ro: " + ex.Message); }
@@ -341,6 +343,7 @@ namespace minhnhat_tool
                 int rT = headRowT + 1, rC = 2, i = 0;
                 foreach (var row in rows)
                 {
+                    if (Cancelled) break;
                     i++;
                     var hd = row.Raw!;
                     string nccCol = "", linkCol = "", maCol = "", hdLienQuanCol = "", ttLienQuanCol = "";
@@ -556,9 +559,13 @@ namespace minhnhat_tool
             return (msttcgp, "");   // vẫn không ra -> chỉ hiện MST
         }
 
-        // ===== Progress overlay =====
+        // ===== Progress overlay + Hủy =====
+        private System.Threading.CancellationTokenSource? _cts;
+
         private void ShowProgress(string text, bool indeterminate = false)
         {
+            _cts = new System.Threading.CancellationTokenSource();
+            btnCancel.IsEnabled = true;
             txtProgress.Text = text;
             barProgress.IsIndeterminate = indeterminate;
             barProgress.Value = 0;
@@ -572,7 +579,21 @@ namespace minhnhat_tool
             barProgress.Value = cur;
             txtProgress.Text = text;
         }
-        private void HideProgress() => overlayProgress.Visibility = Visibility.Collapsed;
+        private void HideProgress()
+        {
+            overlayProgress.Visibility = Visibility.Collapsed;
+            _cts?.Dispose();
+            _cts = null;
+        }
+        // True nếu người dùng đã bấm Hủy
+        private bool Cancelled => _cts?.IsCancellationRequested ?? false;
+
+        private void btnCancel_Click(object sender, RoutedEventArgs e)
+        {
+            _cts?.Cancel();
+            btnCancel.IsEnabled = false;
+            txtProgress.Text = "Đang hủy...";
+        }
 
         // Nút Đồng bộ: đăng nhập + cào hóa đơn TRỰC TIẾP rồi đổ lên bảng (in-process, Cách A)
         // (RabbitMQ/JobPublisher vẫn giữ trong Services — dùng lại khi làm cào tập trung nhiều công ty)
@@ -614,6 +635,7 @@ namespace minhnhat_tool
                 var to = dpDenNgay.SelectedDate.Value;
                 while (chunkStart <= to)
                 {
+                    if (Cancelled) break;
                     var chunkEnd = chunkStart.AddMonths(1).AddDays(-1);
                     if (chunkEnd > to) chunkEnd = to;
                     var part = await _tct.QueryInvoicesAsync(_token, _loaiHD,

@@ -42,6 +42,7 @@ namespace minhnhat_tool
                 int i = 0;
                 foreach (var row in rows)
                 {
+                    if (Cancelled) break;
                     i++;
                     SetProgress(i, rows.Count, $"Đang lấy chi tiết {i}/{rows.Count} hóa đơn...");
                     var hd = row.Raw!;

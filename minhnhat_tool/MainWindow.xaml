@@ -331,6 +331,9 @@
                                TextWrapping="Wrap" TextAlignment="Center" Margin="0,0,0,18"/>
                     <ProgressBar x:Name="barProgress" Height="20" Minimum="0" Maximum="100" Value="0"
                                  Foreground="#22c55e" Background="#0f172a" BorderThickness="0"/>
+                    <Button x:Name="btnCancel" Content="✖  Hủy" Style="{StaticResource Btn}"
+                            Background="#b91c1c" Width="120" Height="36" Margin="0,18,0,0"
+                            HorizontalAlignment="Center" Click="btnCancel_Click"/>
                 </StackPanel>
             </Border>
         </Grid>
