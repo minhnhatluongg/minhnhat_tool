@@ -34,14 +34,16 @@ namespace minhnhat_tool
             Loaded += async (_, __) => await Services.UpdateService.CheckAsync();
         }
 
-        // Đổ danh sách hóa đơn thật lên bảng + tính tổng
+        // Toàn bộ hóa đơn đã tải (nguồn để lọc nội bộ, không mất khi tìm kiếm)
+        private readonly List<InvoiceRow> _hoaDonAll = new();
+
+        // Đổ danh sách hóa đơn thật vào nguồn + hiển thị (qua bộ lọc)
         private void FillGrid(List<HoaDonInfo> list, bool isMuaVao)
         {
-            _hoaDon.Clear();
-            decimal sChua = 0, sThue = 0, sTong = 0;
+            _hoaDonAll.Clear();
             foreach (var hd in list)
             {
-                _hoaDon.Add(new InvoiceRow
+                _hoaDonAll.Add(new InvoiceRow
                 {
                     TrangThaiXml = "Đã tải",
                     KyHieu = hd.Khhdon,
@@ -55,14 +57,37 @@ namespace minhnhat_tool
                     TrangThai = "Hóa đơn mới",
                     Raw = hd
                 });
-                sChua += hd.Tgtcthue;
-                sThue += hd.Tgtthue;
-                sTong += hd.Tgtttbso;
+            }
+            ApplyFilter();
+        }
+
+        // Lọc nội bộ theo ô tìm kiếm (MST người bán/mua, số HĐ, ký hiệu, tên) — chạy local, không gọi API
+        private void ApplyFilter()
+        {
+            string kw = (txtTimKiem?.Text ?? "").Trim().ToLowerInvariant();
+            _hoaDon.Clear();
+            decimal sChua = 0, sThue = 0, sTong = 0;
+            foreach (var r in _hoaDonAll)
+            {
+                if (kw.Length > 0 && !RowMatches(r, kw)) continue;
+                _hoaDon.Add(r);
+                if (r.Raw != null) { sChua += r.Raw.Tgtcthue; sThue += r.Raw.Tgtthue; sTong += r.Raw.Tgtttbso; }
             }
             lblChuaThue.Text = $"Chưa thuế: {sChua:N0} VNĐ";
             lblThue.Text = $"Thuế: {sThue:N0} VNĐ";
             lblTong.Text = $"Tổng thanh toán: {sTong:N0} VNĐ";
-            lblSoLuong.Text = $"Số lượng XML: {list.Count}/{list.Count}";
+            lblSoLuong.Text = $"Số lượng XML: {_hoaDon.Count}/{_hoaDonAll.Count}";
+        }
+
+        private static bool RowMatches(InvoiceRow r, string kw)
+        {
+            var hd = r.Raw;
+            return (r.SoHoaDon ?? "").ToLowerInvariant().Contains(kw)
+                || (r.KyHieu ?? "").ToLowerInvariant().Contains(kw)
+                || (r.NguoiBan ?? "").ToLowerInvariant().Contains(kw)
+                || (r.NguoiMua ?? "").ToLowerInvariant().Contains(kw)
+                || (hd?.Nbmst ?? "").ToLowerInvariant().Contains(kw)
+                || (hd?.Nmmst ?? "").ToLowerInvariant().Contains(kw);
         }
 
         private static string FormatNgay(string raw)
@@ -98,8 +123,9 @@ namespace minhnhat_tool
             btnBanRa.Background = _loaiHD == "sold" ? green : gray;
         }
 
-        private void btnTimNoiBo_Click(object sender, RoutedEventArgs e)
-            => MessageBox.Show("TODO: tìm trong dữ liệu đã tải.");
+        // Tìm nội bộ: lọc trên dữ liệu ĐÃ tải (không gọi lại TCT). Gõ tới đâu lọc tới đó.
+        private void btnTimNoiBo_Click(object sender, RoutedEventArgs e) => ApplyFilter();
+        private void txtTimKiem_TextChanged(object sender, TextChangedEventArgs e) => ApplyFilter();
 
         // ===== Kỳ kế toán -> tự set Từ ngày / Đến ngày =====
         private void cboKy_SelectionChanged(object sender, SelectionChangedEventArgs e)
