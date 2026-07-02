@@ -66,6 +66,131 @@ namespace minhnhat_tool
             finally { HideProgress(); }
         }
 
+        // ===== BẢNG KÊ KHAI THUẾ THEO HÓA ĐƠN (chuẩn Tổng cục Thuế, nhanh, không cần chi tiết dòng) =====
+        private void mnuBangKeKhaiThue_Click(object sender, RoutedEventArgs e)
+        {
+            var rows = _hoaDon.ToList();
+            if (rows.Count == 0) { MessageBox.Show("Chưa có hóa đơn để lập bảng kê."); return; }
+            var dlg = new Microsoft.Win32.SaveFileDialog
+            {
+                Filter = "Excel (*.xlsx)|*.xlsx",
+                FileName = (_lastIsMuaVao ? "BangKeKhaiThue_MuaVao_" : "BangKeKhaiThue_BanRa_") + $"{Session.Mst}_{DateTime.Now:yyyyMMdd_HHmm}.xlsx"
+            };
+            if (dlg.ShowDialog() != true) return;
+            try
+            {
+                using var wb = new XLWorkbook();
+                if (_lastIsMuaVao) KhaiThueMuaVao(wb, rows); else KhaiThueBanRa(wb, rows);
+                wb.SaveAs(dlg.FileName);
+                MessageBox.Show($"Đã xuất bảng kê khai thuế ({rows.Count} hóa đơn):\n{dlg.FileName}");
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(dlg.FileName) { UseShellExecute = true });
+            }
+            catch (Exception ex) { MessageBox.Show("Lỗi xuất bảng kê: " + ex.Message); }
+        }
+
+        private void KhaiThueMuaVao(XLWorkbook wb, List<InvoiceRow> rows)
+        {
+            var ws = wb.AddWorksheet("Mua vào");
+            const int nCol = 10;
+            ws.Cell(1, 1).Value = "BẢNG KÊ HÓA ĐƠN, CHỨNG TỪ HÀNG HÓA, DỊCH VỤ MUA VÀO";
+            Merge(ws, 1, nCol, true, 14, XLAlignmentHorizontalValues.Center);
+            ws.Cell(2, 1).Value = $"Kỳ tính thuế: {KyTinhThue()}";
+            Merge(ws, 2, nCol, false, 11, XLAlignmentHorizontalValues.Center);
+            ws.Cell(3, 1).Value = $"Tên người nộp thuế: {Session.TenDN}     Mã số thuế: {Session.Mst}";
+            Merge(ws, 3, nCol, false, 11, XLAlignmentHorizontalValues.Left);
+
+            int hr = 4;
+            string[] h = { "STT","Số hóa đơn","Ký hiệu","Ngày lập","Tên người bán","MST người bán",
+                           "Giá trị mua vào chưa thuế GTGT","Thuế suất","Tiền thuế GTGT","Ghi chú" };
+            for (int c = 0; c < nCol; c++) ws.Cell(hr, c + 1).Value = h[c];
+
+            int r = hr + 1, stt = 0; decimal sCt = 0, sThue = 0;
+            foreach (var row in rows)
+            {
+                var hd = row.Raw!; stt++;
+                ws.Cell(r, 1).Value = stt;
+                ws.Cell(r, 2).Value = hd.Shdon;
+                ws.Cell(r, 3).Value = hd.Khhdon;
+                ws.Cell(r, 4).Value = row.NgayLap;
+                ws.Cell(r, 5).Value = hd.Nbten;
+                ws.Cell(r, 6).Value = hd.Nbmst;
+                ws.Cell(r, 7).Value = hd.Tgtcthue;
+                ws.Cell(r, 8).Value = SuatHoaDon(hd);
+                ws.Cell(r, 9).Value = hd.Tgtthue;
+                sCt += hd.Tgtcthue; sThue += hd.Tgtthue;
+                r++;
+            }
+            ws.Cell(r, 5).Value = "Tổng cộng";
+            ws.Cell(r, 7).Value = sCt;
+            ws.Cell(r, 9).Value = sThue;
+            ws.Range(r, 1, r, nCol).Style.Font.SetBold().Fill.SetBackgroundColor(XLColor.FromHtml("#FFD200"));
+            StyleKhaiThue(ws, hr, r, nCol, new[] { 7, 9 });
+        }
+
+        private void KhaiThueBanRa(XLWorkbook wb, List<InvoiceRow> rows)
+        {
+            var ws = wb.AddWorksheet("Bán ra");
+            const int nCol = 8;
+            ws.Cell(1, 1).Value = "BẢNG KÊ HÓA ĐƠN, CHỨNG TỪ HÀNG HÓA, DỊCH VỤ BÁN RA";
+            Merge(ws, 1, nCol, true, 14, XLAlignmentHorizontalValues.Center);
+            ws.Cell(2, 1).Value = $"Kỳ tính thuế: {KyTinhThue()}";
+            Merge(ws, 2, nCol, false, 11, XLAlignmentHorizontalValues.Center);
+            ws.Cell(3, 1).Value = $"Tên người nộp thuế: {Session.TenDN}     Mã số thuế: {Session.Mst}";
+            Merge(ws, 3, nCol, false, 11, XLAlignmentHorizontalValues.Left);
+
+            int hr = 4;
+            string[] h = { "STT","Số hóa đơn","Ngày lập","Tên người mua","MST người mua",
+                           "Doanh thu chưa thuế GTGT","Thuế GTGT","Ghi chú" };
+            for (int c = 0; c < nCol; c++) ws.Cell(hr, c + 1).Value = h[c];
+
+            int r = hr + 1; decimal gCt = 0, gThue = 0;
+            for (int b = 0; b <= 5; b++)
+            {
+                var grp = rows.Where(x => x.Raw != null && BucketOf(SuatHoaDon(x.Raw!)) == b).ToList();
+                if (grp.Count == 0) continue;
+                decimal sCt = grp.Sum(x => x.Raw!.Tgtcthue), sThue = grp.Sum(x => x.Raw!.Tgtthue);
+                ws.Cell(r, 1).Value = _tenNhom[b];
+                ws.Cell(r, 6).Value = sCt;
+                ws.Cell(r, 7).Value = sThue;
+                ws.Range(r, 1, r, nCol).Style.Font.SetBold().Fill.SetBackgroundColor(XLColor.FromHtml("#DCE6F1"));
+                r++;
+                int stt = 0;
+                foreach (var row in grp)
+                {
+                    var hd = row.Raw!; stt++;
+                    ws.Cell(r, 1).Value = stt;
+                    ws.Cell(r, 2).Value = hd.Shdon;
+                    ws.Cell(r, 3).Value = row.NgayLap;
+                    ws.Cell(r, 4).Value = hd.Nmten;
+                    ws.Cell(r, 5).Value = hd.Nmmst;
+                    ws.Cell(r, 6).Value = hd.Tgtcthue;
+                    ws.Cell(r, 7).Value = hd.Tgtthue;
+                    r++;
+                }
+                gCt += sCt; gThue += sThue;
+            }
+            ws.Cell(r, 4).Value = "TỔNG CỘNG";
+            ws.Cell(r, 6).Value = gCt;
+            ws.Cell(r, 7).Value = gThue;
+            ws.Range(r, 1, r, nCol).Style.Font.SetBold().Fill.SetBackgroundColor(XLColor.FromHtml("#FFD200"));
+            StyleKhaiThue(ws, hr, r, nCol, new[] { 6, 7 });
+        }
+
+        private static void StyleKhaiThue(IXLWorksheet ws, int hr, int lastRow, int nCol, int[] moneyCols)
+        {
+            var head = ws.Range(hr, 1, hr, nCol);
+            head.Style.Font.Bold = true;
+            head.Style.Alignment.WrapText = true;
+            head.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            head.Style.Fill.BackgroundColor = XLColor.FromHtml("#B8CCE4");
+            var body = ws.Range(hr, 1, lastRow, nCol);
+            body.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+            body.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
+            foreach (var mc in moneyCols) ws.Range(hr + 1, mc, lastRow, mc).Style.NumberFormat.Format = "#,##0";
+            ws.SheetView.FreezeRows(hr);
+            ws.Columns().AdjustToContents();
+        }
+
         // Tách từng dòng hàng của 1 hóa đơn thành LineKe
         private static void ParseLines(string dj, HoaDonInfo hd, string ngay, bool muaVao, List<LineKe> outp)
         {

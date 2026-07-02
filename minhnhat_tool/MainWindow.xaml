@@ -291,7 +291,10 @@
                         <MenuItem Header="📊  Xuất Excel (dòng đã chọn)" Click="mnuExcelChon_Click"/>
                         <MenuItem Header="📊  Xuất Excel (tất cả)" Click="mnuExcel_Click"/>
                         <Separator/>
-                        <MenuItem Header="📋  Xuất Bảng kê thuế GTGT" Click="mnuBangKe_Click"/>
+                        <MenuItem Header="📋  Xuất bảng kê">
+                            <MenuItem Header="Khai thuế GTGT (theo hóa đơn) — nhanh, chuẩn TCT" Click="mnuBangKeKhaiThue_Click"/>
+                            <MenuItem Header="Chi tiết theo dòng hàng (mẫu MISA)" Click="mnuBangKe_Click"/>
+                        </MenuItem>
                     </ContextMenu>
                 </DataGrid.ContextMenu>
                 <DataGrid.ColumnHeaderStyle>
