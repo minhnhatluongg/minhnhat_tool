@@ -54,7 +54,7 @@ namespace minhnhat_tool
                     TongChuaThue = hd.Tgtcthue.ToString("N0"),
                     TongThue = hd.Tgtthue.ToString("N0"),
                     TongThanhToan = hd.Tgtttbso.ToString("N0"),
-                    TrangThai = "Hóa đơn mới",
+                    TrangThai = TrangThaiHD(hd.Tthai),
                     Raw = hd
                 });
             }
@@ -64,12 +64,16 @@ namespace minhnhat_tool
         // Lọc nội bộ theo ô tìm kiếm (MST người bán/mua, số HĐ, ký hiệu, tên) — chạy local, không gọi API
         private void ApplyFilter()
         {
+            if (lblSoLuong == null) return;   // UI đang khởi tạo, các label chưa sẵn sàng
             string kw = (txtTimKiem?.Text ?? "").Trim().ToLowerInvariant();
+            string tt = (cboTrangThai?.SelectedIndex ?? 0) > 0
+                        ? ((ComboBoxItem)cboTrangThai.SelectedItem).Content?.ToString() ?? "" : "";
             _hoaDon.Clear();
             decimal sChua = 0, sThue = 0, sTong = 0;
             foreach (var r in _hoaDonAll)
             {
                 if (kw.Length > 0 && !RowMatches(r, kw)) continue;
+                if (tt.Length > 0 && r.TrangThai != tt) continue;
                 _hoaDon.Add(r);
                 if (r.Raw != null) { sChua += r.Raw.Tgtcthue; sThue += r.Raw.Tgtthue; sTong += r.Raw.Tgtttbso; }
             }
@@ -126,6 +130,7 @@ namespace minhnhat_tool
         // Tìm nội bộ: lọc trên dữ liệu ĐÃ tải (không gọi lại TCT). Gõ tới đâu lọc tới đó.
         private void btnTimNoiBo_Click(object sender, RoutedEventArgs e) => ApplyFilter();
         private void txtTimKiem_TextChanged(object sender, TextChangedEventArgs e) => ApplyFilter();
+        private void cboTrangThai_SelectionChanged(object sender, SelectionChangedEventArgs e) => ApplyFilter();
 
         // ===== Kỳ kế toán -> tự set Từ ngày / Đến ngày =====
         private void cboKy_SelectionChanged(object sender, SelectionChangedEventArgs e)

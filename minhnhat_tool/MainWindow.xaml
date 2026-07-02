@@ -221,6 +221,18 @@
                 </StackPanel>
 
                 <StackPanel Margin="0,0,12,0" VerticalAlignment="Bottom">
+                    <TextBlock Text="TRẠNG THÁI" Style="{StaticResource Lbl}"/>
+                    <ComboBox x:Name="cboTrangThai" Width="150" Style="{StaticResource DarkCombo}" SelectedIndex="0"
+                              SelectionChanged="cboTrangThai_SelectionChanged">
+                        <ComboBoxItem>Tất cả</ComboBoxItem>
+                        <ComboBoxItem>Hóa đơn mới</ComboBoxItem>
+                        <ComboBoxItem>Hóa đơn thay thế</ComboBoxItem>
+                        <ComboBoxItem>Hóa đơn điều chỉnh</ComboBoxItem>
+                        <ComboBoxItem>Hóa đơn hủy</ComboBoxItem>
+                    </ComboBox>
+                </StackPanel>
+
+                <StackPanel Margin="0,0,12,0" VerticalAlignment="Bottom">
                     <TextBlock Text="TÌM (MST / SỐ HĐ / TÊN)" Style="{StaticResource Lbl}"/>
                     <TextBox x:Name="txtTimKiem" Width="240" Height="40"
                              Background="#0f172a" Foreground="White" BorderBrush="#334155"
