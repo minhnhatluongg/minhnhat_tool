@@ -132,21 +132,21 @@ namespace minhnhat_tool
             string[] h = { "STT","Số hóa đơn","Ngày, tháng, năm lập","Tên người mua","MST người mua",
                            "Doanh thu chưa có thuế GTGT","Thuế GTGT","Ghi chú" };
             for (int c = 0; c < nCol; c++) ws.Cell(hr, c + 1).Value = h[c];
-            for (int c = 1; c <= nCol; c++) ws.Cell(hr + 1, c).Value = $"[{c}]";
 
-            var groups = new (int bucket, string label, string code)[]
+            var groups = new (int bucket, string label)[]
             {
-                (0, "1. Hàng hoá, dịch vụ không chịu thuế GTGT:", "[26]"),
-                (1, "2. Hàng hoá, dịch vụ chịu thuế suất thuế GTGT 0%:", "[29]"),
-                (2, "3. Hàng hoá, dịch vụ chịu thuế suất thuế GTGT 5%:", "[30]/[31]"),
-                (3, "4. Hàng hoá, dịch vụ chịu thuế suất thuế GTGT 8%:", ""),
-                (4, "5. Hàng hoá, dịch vụ chịu thuế suất thuế GTGT 10%:", "[32]/[33]"),
-                (5, "6. Hàng hoá, dịch vụ khác:", ""),
+                (0, "1. Hàng hoá, dịch vụ không chịu thuế GTGT:"),
+                (1, "2. Hàng hoá, dịch vụ chịu thuế suất thuế GTGT 0%:"),
+                (2, "3. Hàng hoá, dịch vụ chịu thuế suất thuế GTGT 5%:"),
+                (3, "4. Hàng hoá, dịch vụ chịu thuế suất thuế GTGT 8%:"),
+                (4, "5. Hàng hoá, dịch vụ chịu thuế suất thuế GTGT 10%:"),
+                (5, "6. Hàng hoá, dịch vụ khác:"),
             };
-            int r = hr + 2; decimal gCt = 0, gThue = 0;
+            int r = hr + 1; decimal gCt = 0, gThue = 0;
             foreach (var g in groups)
             {
                 var grp = data.Where(hd => BucketOf(SuatHoaDon(hd)) == g.bucket).ToList();
+                if (grp.Count == 0) continue;   // bỏ nhóm rỗng cho gọn
                 ws.Cell(r, 1).Value = g.label;
                 ws.Range(r, 1, r, nCol).Style.Font.SetBold().Fill.SetBackgroundColor(XLColor.FromHtml("#DCE6F1"));
                 r++;
@@ -164,7 +164,7 @@ namespace minhnhat_tool
                     sCt += hd.Tgtcthue; sThue += hd.Tgtthue;
                     r++;
                 }
-                ws.Cell(r, 4).Value = $"Tổng {g.code}".Trim();
+                ws.Cell(r, 4).Value = "Tổng nhóm";
                 ws.Cell(r, 6).Value = sCt; ws.Cell(r, 7).Value = sThue;
                 ws.Range(r, 1, r, nCol).Style.Font.Bold = true;
                 r++;
@@ -202,9 +202,8 @@ namespace minhnhat_tool
             string[] h = { "STT","Số hóa đơn","Ngày, tháng, năm lập","Tên người bán","MST người bán",
                            "Giá trị HH-DV mua vào","Tổng số thuế GTGT đầu vào","Số thuế GTGT đủ ĐK khấu trừ","Ghi chú" };
             for (int c = 0; c < nCol; c++) ws.Cell(hr, c + 1).Value = h[c];
-            for (int c = 1; c <= nCol; c++) ws.Cell(hr + 1, c).Value = $"[{c}]";
 
-            int r = hr + 2;
+            int r = hr + 1;
             ws.Cell(r, 1).Value = "1. Hàng hoá, dịch vụ dùng riêng cho SXKD chịu thuế GTGT đủ điều kiện khấu trừ:";
             ws.Range(r, 1, r, nCol).Style.Font.SetBold().Fill.SetBackgroundColor(XLColor.FromHtml("#DCE6F1"));
             r++;
