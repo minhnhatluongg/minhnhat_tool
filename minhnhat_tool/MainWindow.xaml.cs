@@ -144,39 +144,59 @@ namespace minhnhat_tool
         // Cache tình trạng NCC theo MST trong phiên (status động nên không lưu file lâu dài)
         private readonly Dictionary<string, (string status, bool risk)> _nccRisk = new();
 
-        // 🛡 Kiểm tra rủi ro: tra tình trạng MST đối tác (mua vào: người bán) qua tracuunnt, tô đỏ HĐ rủi ro
+        // 🛡 Kiểm tra rủi ro: tra tình trạng MST đối tác qua tracuunnt — CHẠY SONG SONG 4 luồng, chỉ tra MST duy nhất.
         private async void btnRuiRo_Click(object sender, RoutedEventArgs e)
         {
             var rows = _hoaDon.ToList();
             if (rows.Count == 0) { MessageBox.Show("Chưa có hóa đơn để kiểm tra."); return; }
 
-            ShowProgress("Đang kiểm tra tình trạng nhà cung cấp...");
-            int i = 0, risky = 0;
+            // Danh sách MST đối tác DUY NHẤT chưa có trong cache (nhiều HĐ cùng NCC -> tra 1 lần)
+            var mstList = rows
+                .Select(r => _lastIsMuaVao ? (r.Raw?.Nbmst ?? "") : (r.Raw?.Nmmst ?? ""))
+                .Where(m => !string.IsNullOrEmpty(m))
+                .Distinct()
+                .Where(m => !_nccRisk.ContainsKey(m))
+                .ToList();
+
+            ShowProgress($"Đang kiểm tra {mstList.Count} nhà cung cấp (song song 4 luồng)...");
+            int done = 0;
+            using var sem = new System.Threading.SemaphoreSlim(4);   // tối đa 4 "worker" cùng lúc
             try
             {
-                foreach (var r in rows)
+                var tasks = mstList.Select(async mst =>
                 {
-                    if (Cancelled) break;
-                    i++;
-                    SetProgress(i, rows.Count, $"Kiểm tra {i}/{rows.Count} đối tác...");
-                    string mst = _lastIsMuaVao ? (r.Raw?.Nbmst ?? "") : (r.Raw?.Nmmst ?? "");
-                    if (string.IsNullOrEmpty(mst)) { r.TinhTrangNcc = ""; r.NccRuiRo = false; continue; }
-
-                    if (!_nccRisk.TryGetValue(mst, out var info))
+                    await sem.WaitAsync();
+                    try
                     {
+                        if (Cancelled) return;
                         var (_, _, status) = await _tct.TcnntLookupAsync(mst);
                         bool risk = !string.IsNullOrEmpty(status)
                                     && status.IndexOf("đang hoạt động", StringComparison.OrdinalIgnoreCase) < 0;
-                        info = (string.IsNullOrEmpty(status) ? "Không tra được" : status, risk);
-                        _nccRisk[mst] = info;
-                        await Task.Delay(150);
+                        // Code sau await chạy trên UI thread -> ghi cache an toàn, không cần khóa
+                        _nccRisk[mst] = (string.IsNullOrEmpty(status) ? "Không tra được" : status, risk);
                     }
-                    r.TinhTrangNcc = info.status;
-                    r.NccRuiRo = info.risk;
-                    if (info.risk) risky++;
+                    finally
+                    {
+                        done++;
+                        SetProgress(done, mstList.Count, $"Đã kiểm tra {done}/{mstList.Count} nhà cung cấp...");
+                        sem.Release();
+                    }
+                }).ToList();
+                await Task.WhenAll(tasks);
+
+                // Map kết quả (từ cache) vào từng dòng hóa đơn
+                int risky = 0;
+                foreach (var r in rows)
+                {
+                    string mst = _lastIsMuaVao ? (r.Raw?.Nbmst ?? "") : (r.Raw?.Nmmst ?? "");
+                    if (!string.IsNullOrEmpty(mst) && _nccRisk.TryGetValue(mst, out var info))
+                    {
+                        r.TinhTrangNcc = info.status; r.NccRuiRo = info.risk;
+                        if (info.risk) risky++;
+                    }
                 }
                 grdHoaDon.Items.Refresh();
-                string prefix = Cancelled ? $"Đã HỦY (kiểm tra {i}/{rows.Count}). " : "Đã kiểm tra xong. ";
+                string prefix = Cancelled ? "Đã HỦY (kết quả 1 phần đã có). " : "Đã kiểm tra xong. ";
                 MessageBox.Show(risky == 0
                     ? prefix + "Không phát hiện đối tác rủi ro."
                     : prefix + $"⚠ Phát hiện {risky} hóa đơn có đối tác RỦI RO (không ở trạng thái 'đang hoạt động').\nCác dòng đã được tô đỏ.",
