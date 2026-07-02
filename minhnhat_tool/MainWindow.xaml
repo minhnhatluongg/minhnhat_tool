@@ -257,8 +257,12 @@
                             Width="220" Margin="10,0,0,0" Click="btnDongBo_Click"/>
                     <Button x:Name="btnThongKe" Content="📊  Thống kê" Style="{StaticResource Btn}"
                             Background="#7c3aed" Width="130" Margin="10,0,0,0" Click="btnThongKe_Click"/>
+                    <!-- TẠM TẮT: Kiểm tra rủi ro gọi tracuunnt quá nhiều -> quá tải server.
+                         Bật lại sau khi giảm luồng + cache tình trạng theo ngày.
                     <Button x:Name="btnRuiRo" Content="🛡  Kiểm tra rủi ro" Style="{StaticResource Btn}"
                             Background="#b91c1c" Width="170" Margin="10,0,0,0" Click="btnRuiRo_Click"/>
+                    -->
+                    <Button x:Name="btnRuiRo" Visibility="Collapsed" Click="btnRuiRo_Click"/>
                 </StackPanel>
             </WrapPanel>
         </Border>
