@@ -127,6 +127,57 @@ namespace minhnhat_tool
             btnBanRa.Background = _loaiHD == "sold" ? green : gray;
         }
 
+        // Mở Dashboard thống kê trên dữ liệu đang hiển thị
+        private void btnThongKe_Click(object sender, RoutedEventArgs e)
+        {
+            var rows = _hoaDon.ToList();
+            if (rows.Count == 0) { MessageBox.Show("Chưa có dữ liệu. Bấm 'Đồng bộ' để tải hóa đơn trước."); return; }
+            new DashboardWindow(rows, _lastIsMuaVao) { Owner = this }.ShowDialog();
+        }
+
+        // Cache tình trạng NCC theo MST trong phiên (status động nên không lưu file lâu dài)
+        private readonly Dictionary<string, (string status, bool risk)> _nccRisk = new();
+
+        // 🛡 Kiểm tra rủi ro: tra tình trạng MST đối tác (mua vào: người bán) qua tracuunnt, tô đỏ HĐ rủi ro
+        private async void btnRuiRo_Click(object sender, RoutedEventArgs e)
+        {
+            var rows = _hoaDon.ToList();
+            if (rows.Count == 0) { MessageBox.Show("Chưa có hóa đơn để kiểm tra."); return; }
+
+            ShowProgress("Đang kiểm tra tình trạng nhà cung cấp...");
+            int i = 0, risky = 0;
+            try
+            {
+                foreach (var r in rows)
+                {
+                    i++;
+                    SetProgress(i, rows.Count, $"Kiểm tra {i}/{rows.Count} đối tác...");
+                    string mst = _lastIsMuaVao ? (r.Raw?.Nbmst ?? "") : (r.Raw?.Nmmst ?? "");
+                    if (string.IsNullOrEmpty(mst)) { r.TinhTrangNcc = ""; r.NccRuiRo = false; continue; }
+
+                    if (!_nccRisk.TryGetValue(mst, out var info))
+                    {
+                        var (_, _, status) = await _tct.TcnntLookupAsync(mst);
+                        bool risk = !string.IsNullOrEmpty(status)
+                                    && status.IndexOf("đang hoạt động", StringComparison.OrdinalIgnoreCase) < 0;
+                        info = (string.IsNullOrEmpty(status) ? "Không tra được" : status, risk);
+                        _nccRisk[mst] = info;
+                        await Task.Delay(150);
+                    }
+                    r.TinhTrangNcc = info.status;
+                    r.NccRuiRo = info.risk;
+                    if (info.risk) risky++;
+                }
+                grdHoaDon.Items.Refresh();
+                MessageBox.Show(risky == 0
+                    ? "Đã kiểm tra xong. Không phát hiện đối tác rủi ro."
+                    : $"⚠ Phát hiện {risky} hóa đơn có đối tác RỦI RO (không ở trạng thái 'đang hoạt động').\nCác dòng đã được tô đỏ.",
+                    "Kết quả kiểm tra rủi ro");
+            }
+            catch (Exception ex) { MessageBox.Show("Lỗi kiểm tra rủi ro: " + ex.Message); }
+            finally { HideProgress(); }
+        }
+
         // Tìm nội bộ: lọc trên dữ liệu ĐÃ tải (không gọi lại TCT). Gõ tới đâu lọc tới đó.
         private void btnTimNoiBo_Click(object sender, RoutedEventArgs e) => ApplyFilter();
         private void txtTimKiem_TextChanged(object sender, TextChangedEventArgs e) => ApplyFilter();
@@ -495,7 +546,7 @@ namespace minhnhat_tool
                 return ($"{msttcgp} - {cached.Ten}", cached.Link);
 
             // (3) Chưa biết -> gọi API tracuunnt (chậm vì anti-bot) rồi nhớ luôn
-            var (ten, _) = await _tct.TcnntLookupAsync(msttcgp);
+            var (ten, _, _) = await _tct.TcnntLookupAsync(msttcgp);
             if (!string.IsNullOrEmpty(ten))
             {
                 Services.NccStore.Put(msttcgp, ten, "");   // link rỗng: NCC ngoài bảng chưa có template tra cứu

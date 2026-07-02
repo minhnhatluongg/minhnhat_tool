@@ -37,7 +37,7 @@ namespace minhnhat_tool
             IsEnabled = false;
             try
             {
-                var (ten, _) = await _tct.TcnntLookupAsync(mst);
+                var (ten, _, _) = await _tct.TcnntLookupAsync(mst);
                 if (!string.IsNullOrEmpty(ten)) { txtTen.Text = ten; NccStore.Put(mst, ten, ""); }
                 else txtTen.Text = "(Không tra được tên — kiểm tra lại MST)";
             }

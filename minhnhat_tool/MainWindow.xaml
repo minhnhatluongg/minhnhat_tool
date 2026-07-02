@@ -187,7 +187,7 @@
 
         <!-- ===== TOOLBAR (bộ lọc + hành động) ===== -->
         <Border DockPanel.Dock="Top" Style="{StaticResource Card}" Margin="0,0,0,12">
-            <StackPanel Orientation="Horizontal">
+            <WrapPanel Orientation="Horizontal">
                 <StackPanel Margin="0,0,24,0" VerticalAlignment="Bottom">
                     <TextBlock Text="LOẠI HÓA ĐƠN" Style="{StaticResource Lbl}"/>
                     <StackPanel Orientation="Horizontal">
@@ -245,8 +245,12 @@
                             Width="150" Click="btnTimNoiBo_Click"/>
                     <Button x:Name="btnDongBo" Content="☁  Đồng bộ Tổng cục Thuế" Style="{StaticResource BtnGreen}"
                             Width="220" Margin="10,0,0,0" Click="btnDongBo_Click"/>
+                    <Button x:Name="btnThongKe" Content="📊  Thống kê" Style="{StaticResource Btn}"
+                            Background="#7c3aed" Width="130" Margin="10,0,0,0" Click="btnThongKe_Click"/>
+                    <Button x:Name="btnRuiRo" Content="🛡  Kiểm tra rủi ro" Style="{StaticResource Btn}"
+                            Background="#b91c1c" Width="170" Margin="10,0,0,0" Click="btnRuiRo_Click"/>
                 </StackPanel>
-            </StackPanel>
+            </WrapPanel>
         </Border>
 
         <!-- ===== STATUS BAR (đáy) ===== -->
@@ -270,6 +274,12 @@
                 <DataGrid.Resources>
                     <Style TargetType="DataGridRow">
                         <EventSetter Event="PreviewMouseRightButtonDown" Handler="Row_RightClick"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding NccRuiRo}" Value="True">
+                                <Setter Property="Background" Value="#7f1d1d"/>
+                                <Setter Property="Foreground" Value="#fecaca"/>
+                            </DataTrigger>
+                        </Style.Triggers>
                     </Style>
                 </DataGrid.Resources>
                 <DataGrid.ContextMenu>
@@ -305,6 +315,7 @@
                     <DataGridTextColumn Header="Thuế"           Binding="{Binding TongThue}"    Width="100" ElementStyle="{StaticResource CellRight}"/>
                     <DataGridTextColumn Header="Thanh toán"     Binding="{Binding TongThanhToan}" Width="130" ElementStyle="{StaticResource CellRight}"/>
                     <DataGridTextColumn Header="Trạng thái"     Binding="{Binding TrangThai}"   Width="120" ElementStyle="{StaticResource CellCenter}"/>
+                    <DataGridTextColumn Header="Tình trạng NCC" Binding="{Binding TinhTrangNcc}" Width="180"/>
                 </DataGrid.Columns>
             </DataGrid>
         </Border>

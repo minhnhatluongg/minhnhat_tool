@@ -17,28 +17,29 @@ namespace minhnhat_tool.Services
         // API key cho dịch vụ tra cứu MST (tracuunnt) — dùng để lấy TÊN nhà cung cấp từ MST
         private const string TCNNT_APIKEY = "dk_Fyl_NHVTteBK1m436yjbvCDBEmuJxWmr";
 
-        /// <summary>Tra tên người nộp thuế theo MST (qua dịch vụ tracuunnt). Trả về (tên, địa chỉ). Rỗng nếu không tìm thấy.</summary>
-        public async Task<(string ten, string diaChi)> TcnntLookupAsync(string mst)
+        /// <summary>Tra người nộp thuế theo MST (qua dịch vụ tracuunnt). Trả về (tên, địa chỉ, tình trạng). Rỗng nếu không tìm thấy.</summary>
+        public async Task<(string ten, string diaChi, string status)> TcnntLookupAsync(string mst)
         {
-            if (string.IsNullOrWhiteSpace(mst)) return ("", "");
+            if (string.IsNullOrWhiteSpace(mst)) return ("", "", "");
             try
             {
                 string url = $"{DECAPTCHA}/tcnnt/lookup?mst={Uri.EscapeDataString(mst)}&max_tries=12&delay=1.5&api_key={TCNNT_APIKEY}";
                 var resp = await http.GetAsync(url);
-                if (!resp.IsSuccessStatusCode) return ("", "");
+                if (!resp.IsSuccessStatusCode) return ("", "", "");
                 using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
                 var root = doc.RootElement;
-                if (!root.TryGetProperty("found", out var f) || !f.GetBoolean()) return ("", "");
+                if (!root.TryGetProperty("found", out var f) || !f.GetBoolean()) return ("", "", "");
                 if (root.TryGetProperty("results", out var rs) && rs.ValueKind == JsonValueKind.Array && rs.GetArrayLength() > 0)
                 {
                     var r0 = rs[0];
                     string ten = r0.TryGetProperty("name", out var n) ? (n.GetString() ?? "") : "";
                     string dc = r0.TryGetProperty("address", out var a) ? (a.GetString() ?? "") : "";
-                    return (ten, dc);
+                    string st = r0.TryGetProperty("status", out var s) ? (s.GetString() ?? "") : "";
+                    return (ten, dc, st);
                 }
             }
             catch { }
-            return ("", "");
+            return ("", "", "");
         }
 
         /// <summary>Đăng nhập hoadondientu (vượt captcha tự động) -> Bearer token.</summary>
