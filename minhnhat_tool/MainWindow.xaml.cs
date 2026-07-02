@@ -55,6 +55,7 @@ namespace minhnhat_tool
                     TongThue = hd.Tgtthue.ToString("N0"),
                     TongThanhToan = hd.Tgtttbso.ToString("N0"),
                     TrangThai = TrangThaiHD(hd.Tthai),
+                    LoaiHD = hd.MayTinhTien ? "Máy tính tiền" : "Điện tử",
                     Raw = hd
                 });
             }
@@ -68,19 +69,24 @@ namespace minhnhat_tool
             string kw = (txtTimKiem?.Text ?? "").Trim().ToLowerInvariant();
             string tt = (cboTrangThai?.SelectedIndex ?? 0) > 0
                         ? ((ComboBoxItem)cboTrangThai.SelectedItem).Content?.ToString() ?? "" : "";
+            int loaiIdx = cboLoaiCT?.SelectedIndex ?? 0;   // 0=Tất cả, 1=Điện tử, 2=Máy tính tiền
             _hoaDon.Clear();
-            decimal sChua = 0, sThue = 0, sTong = 0;
+            decimal sChua = 0, sThue = 0, sTong = 0; int soPos = 0;
             foreach (var r in _hoaDonAll)
             {
                 if (kw.Length > 0 && !RowMatches(r, kw)) continue;
                 if (tt.Length > 0 && r.TrangThai != tt) continue;
+                bool pos = r.Raw?.MayTinhTien ?? false;
+                if (loaiIdx == 1 && pos) continue;    // chỉ hóa đơn điện tử
+                if (loaiIdx == 2 && !pos) continue;   // chỉ HĐ máy tính tiền
                 _hoaDon.Add(r);
+                if (pos) soPos++;
                 if (r.Raw != null) { sChua += r.Raw.Tgtcthue; sThue += r.Raw.Tgtthue; sTong += r.Raw.Tgtttbso; }
             }
             lblChuaThue.Text = $"Chưa thuế: {sChua:N0} VNĐ";
             lblThue.Text = $"Thuế: {sThue:N0} VNĐ";
             lblTong.Text = $"Tổng thanh toán: {sTong:N0} VNĐ";
-            lblSoLuong.Text = $"Số lượng XML: {_hoaDon.Count}/{_hoaDonAll.Count}";
+            lblSoLuong.Text = $"Số lượng: {_hoaDon.Count}/{_hoaDonAll.Count}  (máy tính tiền: {soPos})";
         }
 
         private static bool RowMatches(InvoiceRow r, string kw)
@@ -184,6 +190,7 @@ namespace minhnhat_tool
         private void btnTimNoiBo_Click(object sender, RoutedEventArgs e) => ApplyFilter();
         private void txtTimKiem_TextChanged(object sender, TextChangedEventArgs e) => ApplyFilter();
         private void cboTrangThai_SelectionChanged(object sender, SelectionChangedEventArgs e) => ApplyFilter();
+        private void cboLoaiCT_SelectionChanged(object sender, SelectionChangedEventArgs e) => ApplyFilter();
 
         // ===== Kỳ kế toán -> tự set Từ ngày / Đến ngày =====
         private void cboKy_SelectionChanged(object sender, SelectionChangedEventArgs e)

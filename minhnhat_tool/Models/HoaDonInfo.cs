@@ -20,5 +20,6 @@ namespace minhnhat_tool.Models
         public string Dvtte { get; set; } = "VND";   // đơn vị tiền tệ
         public decimal Tgia { get; set; } = 1;       // tỷ giá
         public decimal Tgtphi { get; set; }          // tổng tiền phí
+        public bool MayTinhTien { get; set; }         // true = HĐ có mã khởi tạo từ máy tính tiền (POS, từ /sco-query)
     }
 }

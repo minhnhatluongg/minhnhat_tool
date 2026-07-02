@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Phần mềm quản lý hóa đơn" Height="720" Width="1200"
-        Icon="app.ico"
+        Icon="app.ico" Language="vi-VN"
         WindowStartupLocation="CenterScreen" Background="#0b0f1a">
 
     <!-- ===== STYLE dùng chung (cho nút bo góc, dark) ===== -->
@@ -233,6 +233,16 @@
                 </StackPanel>
 
                 <StackPanel Margin="0,0,12,0" VerticalAlignment="Bottom">
+                    <TextBlock Text="LOẠI CHỨNG TỪ" Style="{StaticResource Lbl}"/>
+                    <ComboBox x:Name="cboLoaiCT" Width="160" Style="{StaticResource DarkCombo}" SelectedIndex="0"
+                              SelectionChanged="cboLoaiCT_SelectionChanged">
+                        <ComboBoxItem>Tất cả</ComboBoxItem>
+                        <ComboBoxItem>Hóa đơn điện tử</ComboBoxItem>
+                        <ComboBoxItem>HĐ máy tính tiền</ComboBoxItem>
+                    </ComboBox>
+                </StackPanel>
+
+                <StackPanel Margin="0,0,12,0" VerticalAlignment="Bottom">
                     <TextBlock Text="TÌM (MST / SỐ HĐ / TÊN)" Style="{StaticResource Lbl}"/>
                     <TextBox x:Name="txtTimKiem" Width="240" Height="40"
                              Background="#0f172a" Foreground="White" BorderBrush="#334155"
@@ -310,6 +320,18 @@
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="Trạng thái XML" Binding="{Binding TrangThaiXml}" Width="110" ElementStyle="{StaticResource CellCenter}"/>
                     <DataGridTextColumn Header="Ký hiệu"       Binding="{Binding KyHieu}"      Width="80"  ElementStyle="{StaticResource CellCenter}"/>
+                    <DataGridTextColumn Header="Loại HĐ"       Binding="{Binding LoaiHD}"      Width="120">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource CellCenter}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding LoaiHD}" Value="Máy tính tiền">
+                                        <Setter Property="Foreground" Value="#f59e0b"/>
+                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
                     <DataGridTextColumn Header="Số HĐ"          Binding="{Binding SoHoaDon}"    Width="90"  ElementStyle="{StaticResource CellCenter}"/>
                     <DataGridTextColumn Header="Ngày lập"       Binding="{Binding NgayLap}"     Width="100" ElementStyle="{StaticResource CellCenter}"/>
                     <DataGridTextColumn Header="Người bán"      Binding="{Binding NguoiBan}"    Width="*"/>

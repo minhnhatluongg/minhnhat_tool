@@ -18,6 +18,7 @@ namespace minhnhat_tool.Models
         public string TongThue { get; set; } = "";
         public string TongThanhToan { get; set; } = "";
         public string TrangThai { get; set; } = "";
+        public string LoaiHD { get; set; } = "";      // "Điện tử" hoặc "Máy tính tiền"
 
         // Kiểm tra rủi ro nhà cung cấp (tra tình trạng MST qua tracuunnt)
         public string TinhTrangNcc { get; set; } = "";

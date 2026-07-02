@@ -108,9 +108,14 @@ namespace minhnhat_tool.Services
 
                 using var doc = JsonDocument.Parse(json);
                 var root = doc.RootElement;
+                bool pos = prefix == "sco-query";   // hóa đơn khởi tạo từ máy tính tiền
                 if (root.TryGetProperty("datas", out var datas) && datas.ValueKind == JsonValueKind.Array)
                     foreach (var it in datas.EnumerateArray())
-                        list.Add(ParseHoaDon(it));
+                    {
+                        var hd = ParseHoaDon(it);
+                        hd.MayTinhTien = pos;
+                        list.Add(hd);
+                    }
 
                 state = root.TryGetProperty("state", out var st) && st.ValueKind == JsonValueKind.String ? st.GetString() : null;
             }
