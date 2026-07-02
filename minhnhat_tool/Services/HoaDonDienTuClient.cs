@@ -66,50 +66,79 @@ namespace minhnhat_tool.Services
             return doc.RootElement.GetProperty("token").GetString() ?? "";
         }
 
-        /// <summary>Cào hóa đơn theo loại: "purchase" = Mua vào (đầu vào), "sold" = Bán ra (đầu ra).</summary>
+        /// <summary>Cào hóa đơn theo loại: "purchase" = Mua vào (đầu vào), "sold" = Bán ra (đầu ra).
+        /// Gộp CẢ HAI nguồn: hóa đơn điện tử thường (/query) và hóa đơn có mã khởi tạo từ máy tính tiền (/sco-query).</summary>
         public async Task<List<HoaDonInfo>> QueryInvoicesAsync(string token, string loai, string tuNgay, string denNgay)
         {
-            string search = $"tdlap=ge={tuNgay}T00:00:00;tdlap=le={denNgay}T23:59:59";
-            string url = $"{HDDT}/query/invoices/{loai}?sort=tdlap:desc&size=50&search={Uri.EscapeDataString(search)}";
-
-            var req = new HttpRequestMessage(HttpMethod.Get, url);
-            req.Headers.Add("Authorization", "Bearer " + token);
-            var resp = await http.SendAsync(req);
-            string json = await resp.Content.ReadAsStringAsync();
-            if (!resp.IsSuccessStatusCode)
-                throw new Exception($"Không tải được hóa đơn ({(int)resp.StatusCode}). {json}");
-
             var list = new List<HoaDonInfo>();
-            using var doc = JsonDocument.Parse(json);
-            if (doc.RootElement.TryGetProperty("datas", out var datas) && datas.ValueKind == JsonValueKind.Array)
+            // 1) Hóa đơn điện tử thường
+            list.AddRange(await QueryPagedAsync(token, "query", loai, tuNgay, denNgay, required: true));
+            // 2) Hóa đơn có mã khởi tạo từ máy tính tiền (POS) — best-effort, không có thì bỏ qua
+            list.AddRange(await QueryPagedAsync(token, "sco-query", loai, tuNgay, denNgay, required: false));
+
+            // Khử trùng lặp theo (MST bán + ký hiệu + số + mẫu số)
+            var seen = new HashSet<string>();
+            var result = new List<HoaDonInfo>();
+            foreach (var x in list)
+                if (seen.Add($"{x.Nbmst}|{x.Khhdon}|{x.Shdon}|{x.Khmshdon}"))
+                    result.Add(x);
+            return result;
+        }
+
+        // Tải 1 nguồn, tự PHÂN TRANG theo con trỏ "state" (TCT trả tối đa 50 dòng/lần)
+        private async Task<List<HoaDonInfo>> QueryPagedAsync(string token, string prefix, string loai, string tuNgay, string denNgay, bool required)
+        {
+            var list = new List<HoaDonInfo>();
+            string search = $"tdlap=ge={tuNgay}T00:00:00;tdlap=le={denNgay}T23:59:59";
+            string? state = null;
+            int guard = 0;
+            do
             {
-                foreach (var it in datas.EnumerateArray())
+                string url = $"{HDDT}/{prefix}/invoices/{loai}?sort=tdlap:desc&size=50&search={Uri.EscapeDataString(search)}";
+                if (!string.IsNullOrEmpty(state)) url += $"&state={Uri.EscapeDataString(state)}";
+                var req = new HttpRequestMessage(HttpMethod.Get, url);
+                req.Headers.Add("Authorization", "Bearer " + token);
+                var resp = await http.SendAsync(req);
+                string json = await resp.Content.ReadAsStringAsync();
+                if (!resp.IsSuccessStatusCode)
                 {
-                    list.Add(new HoaDonInfo
-                    {
-                        Khmshdon = GetStr(it, "khmshdon"),
-                        Khhdon   = GetStr(it, "khhdon"),
-                        Shdon    = GetStr(it, "shdon"),
-                        Tdlap    = GetStr(it, "tdlap"),
-                        Nbmst    = GetStr(it, "nbmst"),
-                        Nbten    = GetStr(it, "nbten"),
-                        Nmmst    = GetStr(it, "nmmst"),
-                        Nmten    = GetStr(it, "nmten"),
-                        Tgtcthue = GetDec(it, "tgtcthue"),
-                        Tgtthue  = GetDec(it, "tgtthue"),
-                        Tgtttbso = GetDec(it, "tgtttbso"),
-                        Ttcktmai = GetDec(it, "ttcktmai"),
-                        Ttxly    = GetInt(it, "ttxly"),
-                        Tthai    = GetInt(it, "tthai"),
-                        Nmdchi   = GetStr(it, "nmdchi"),
-                        Dvtte    = GetStr(it, "dvtte"),
-                        Tgia     = GetDec(it, "tgia"),
-                        Tgtphi   = GetDec(it, "tgtphi"),
-                    });
+                    if (!required) return list;   // endpoint POS có thể không dùng được -> bỏ qua
+                    throw new Exception($"Không tải được hóa đơn ({(int)resp.StatusCode}). {json}");
                 }
+
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+                if (root.TryGetProperty("datas", out var datas) && datas.ValueKind == JsonValueKind.Array)
+                    foreach (var it in datas.EnumerateArray())
+                        list.Add(ParseHoaDon(it));
+
+                state = root.TryGetProperty("state", out var st) && st.ValueKind == JsonValueKind.String ? st.GetString() : null;
             }
+            while (!string.IsNullOrEmpty(state) && ++guard < 200);
             return list;
         }
+
+        private static HoaDonInfo ParseHoaDon(JsonElement it) => new HoaDonInfo
+        {
+            Khmshdon = GetStr(it, "khmshdon"),
+            Khhdon   = GetStr(it, "khhdon"),
+            Shdon    = GetStr(it, "shdon"),
+            Tdlap    = GetStr(it, "tdlap"),
+            Nbmst    = GetStr(it, "nbmst"),
+            Nbten    = GetStr(it, "nbten"),
+            Nmmst    = GetStr(it, "nmmst"),
+            Nmten    = GetStr(it, "nmten"),
+            Tgtcthue = GetDec(it, "tgtcthue"),
+            Tgtthue  = GetDec(it, "tgtthue"),
+            Tgtttbso = GetDec(it, "tgtttbso"),
+            Ttcktmai = GetDec(it, "ttcktmai"),
+            Ttxly    = GetInt(it, "ttxly"),
+            Tthai    = GetInt(it, "tthai"),
+            Nmdchi   = GetStr(it, "nmdchi"),
+            Dvtte    = GetStr(it, "dvtte"),
+            Tgia     = GetDec(it, "tgia"),
+            Tgtphi   = GetDec(it, "tgtphi"),
+        };
 
         /// <summary>Lấy CHI TIẾT 1 hóa đơn (gồm các dòng hàng hóa) -> JSON. Best-effort.</summary>
         public async Task<string> GetInvoiceDetailAsync(string token, HoaDonInfo hd)
