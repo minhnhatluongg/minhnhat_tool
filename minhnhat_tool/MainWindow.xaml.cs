@@ -70,6 +70,7 @@ namespace minhnhat_tool
             string tt = (cboTrangThai?.SelectedIndex ?? 0) > 0
                         ? ((ComboBoxItem)cboTrangThai.SelectedItem).Content?.ToString() ?? "" : "";
             int loaiIdx = cboLoaiCT?.SelectedIndex ?? 0;   // 0=Tất cả, 1=Điện tử, 2=Máy tính tiền
+            grdHoaDon.ItemsSource = null;                  // tháo binding -> đổ hàng trăm dòng nhanh (tránh render O(n^2))
             _hoaDon.Clear();
             decimal sChua = 0, sThue = 0, sTong = 0; int soPos = 0;
             foreach (var r in _hoaDonAll)
@@ -83,6 +84,7 @@ namespace minhnhat_tool
                 if (pos) soPos++;
                 if (r.Raw != null) { sChua += r.Raw.Tgtcthue; sThue += r.Raw.Tgtthue; sTong += r.Raw.Tgtttbso; }
             }
+            grdHoaDon.ItemsSource = _hoaDon;               // gắn lại -> render 1 lần
             lblChuaThue.Text = $"Chưa thuế: {sChua:N0} VNĐ";
             lblThue.Text = $"Thuế: {sThue:N0} VNĐ";
             lblTong.Text = $"Tổng thanh toán: {sTong:N0} VNĐ";
@@ -342,7 +344,7 @@ namespace minhnhat_tool
             {
                 using var wb = new ClosedXML.Excel.XLWorkbook();
                 var wsT = wb.AddWorksheet("TongHop");
-                string[] hT = { "STT","Ký hiệu mẫu số","Ký hiệu hóa đơn","Số hóa đơn","Ngày lập",
+                string[] hT = { "STT","Ký hiệu mẫu số","Ký hiệu hóa đơn","Số hóa đơn","Ngày lập","Loại HĐ",
                                 "MST người bán/xuất hàng","Tên người bán/xuất hàng","MST người mua/nhận hàng","Tên người mua/nhận hàng",
                                 "Địa chỉ người mua","Tổng tiền chưa thuế","Tổng tiền thuế","Tổng tiền chiết khấu thương mại",
                                 "Tổng tiền phí","Tổng tiền thanh toán","Đơn vị tiền tệ","Tỷ giá","Trạng thái hóa đơn","Kết quả kiểm tra hóa đơn",
@@ -385,6 +387,7 @@ namespace minhnhat_tool
                             if (a > 0) await Task.Delay(500 * a);
                             try { dj = await _tct.GetInvoiceDetailAsync(_token, hd); } catch { dj = ""; }
                         }
+                        int soDong = 0;   // đếm số dòng hàng đã ghi cho HĐ này (0 -> ghi dòng dự phòng)
                         try
                         {
                             if (!string.IsNullOrEmpty(dj))
@@ -400,10 +403,14 @@ namespace minhnhat_tool
                                 if (r.TryGetProperty("hdhhdvu", out var arr) && arr.ValueKind == JsonValueKind.Array)
                                     foreach (var it in arr.EnumerateArray())
                                     {
+                                        int tchat = (int)ExD(it, "tchat");         // 1=HHDV, 2=khuyến mại, 3=chiết khấu, 4=ghi chú
+                                        if (tchat == 4) continue;                  // dòng diễn giải/ghi chú: không có tiền
+                                        double sign = tchat == 3 ? -1.0 : 1.0;     // chiết khấu thương mại -> TRỪ vào tổng
                                         double thtien = ExD(it, "thtien");        // thành tiền chưa thuế
                                         double tsuat  = ExD(it, "tsuat");          // thuế suất dạng số (0.08)
                                         double tthue  = ExD(it, "tthue");          // tiền thuế/dòng (hay null)
                                         if (tthue <= 0) tthue = Math.Round(thtien * tsuat, 0);  // null -> tự tính
+                                        thtien *= sign; tthue *= sign;             // dòng chiết khấu -> giá trị âm
                                         wsC.Cell(rC, 1).Value  = hd.Khhdon;
                                         wsC.Cell(rC, 2).Value  = hd.Shdon;
                                         wsC.Cell(rC, 3).Value  = ExS(it, "stt");
@@ -417,11 +424,24 @@ namespace minhnhat_tool
                                         wsC.Cell(rC, 11).Value = ExS(it, "ltsuat");      // thuế suất "8%"
                                         wsC.Cell(rC, 12).Value = tthue;                  // tiền thuế
                                         wsC.Cell(rC, 13).Value = thtien + tthue;         // thành tiền sau thuế
-                                        rC++;
+                                        rC++; soDong++;
                                     }
                             }
                         }
                         catch { }
+
+                        // Không lấy được dòng hàng (TCT chặn chi tiết) -> ghi 1 dòng ở mức hóa đơn
+                        // để tổng cột ChiTiet KHÔNG bị thiếu so với sheet TongHop.
+                        if (soDong == 0)
+                        {
+                            wsC.Cell(rC, 1).Value  = hd.Khhdon;
+                            wsC.Cell(rC, 2).Value  = hd.Shdon;
+                            wsC.Cell(rC, 4).Value  = "(chưa lấy được chi tiết)";
+                            wsC.Cell(rC, 10).Value = (double)hd.Tgtcthue;
+                            wsC.Cell(rC, 12).Value = (double)hd.Tgtthue;
+                            wsC.Cell(rC, 13).Value = (double)hd.Tgtttbso;
+                            rC++;
+                        }
 
                         // Hóa đơn liên quan + Thông tin liên quan (thường rỗng, chỉ có khi HĐ bị điều chỉnh/thay thế/sai sót)
                         try { hdLienQuanCol = TomTatLienQuan(await _tct.GetRelativeAsync(_token, hd)); } catch { }
@@ -435,25 +455,26 @@ namespace minhnhat_tool
                     wsT.Cell(rT, 3).Value = hd.Khhdon;
                     wsT.Cell(rT, 4).Value = hd.Shdon;
                     wsT.Cell(rT, 5).Value = row.NgayLap;
-                    wsT.Cell(rT, 6).Value = hd.Nbmst;
-                    wsT.Cell(rT, 7).Value = hd.Nbten;
-                    wsT.Cell(rT, 8).Value = hd.Nmmst;
-                    wsT.Cell(rT, 9).Value = hd.Nmten;
-                    wsT.Cell(rT, 10).Value = hd.Nmdchi;
-                    wsT.Cell(rT, 11).Value = hd.Tgtcthue;
-                    wsT.Cell(rT, 12).Value = hd.Tgtthue;
-                    wsT.Cell(rT, 13).Value = hd.Ttcktmai;
-                    wsT.Cell(rT, 14).Value = hd.Tgtphi;
-                    wsT.Cell(rT, 15).Value = hd.Tgtttbso;
-                    wsT.Cell(rT, 16).Value = hd.Dvtte;
-                    wsT.Cell(rT, 17).Value = hd.Tgia;
-                    wsT.Cell(rT, 18).Value = TrangThaiHD(hd.Tthai);
-                    wsT.Cell(rT, 19).Value = KetQua(hd.Ttxly);
-                    wsT.Cell(rT, 20).Value = nccCol;
-                    wsT.Cell(rT, 21).Value = linkCol;
-                    wsT.Cell(rT, 22).Value = maCol;
-                    wsT.Cell(rT, 23).Value = hdLienQuanCol;
-                    wsT.Cell(rT, 24).Value = ttLienQuanCol;
+                    wsT.Cell(rT, 6).Value = row.LoaiHD;   // "Điện tử" / "Máy tính tiền"
+                    wsT.Cell(rT, 7).Value = hd.Nbmst;
+                    wsT.Cell(rT, 8).Value = hd.Nbten;
+                    wsT.Cell(rT, 9).Value = hd.Nmmst;
+                    wsT.Cell(rT, 10).Value = hd.Nmten;
+                    wsT.Cell(rT, 11).Value = hd.Nmdchi;
+                    wsT.Cell(rT, 12).Value = hd.Tgtcthue;
+                    wsT.Cell(rT, 13).Value = hd.Tgtthue;
+                    wsT.Cell(rT, 14).Value = hd.Ttcktmai;
+                    wsT.Cell(rT, 15).Value = hd.Tgtphi;
+                    wsT.Cell(rT, 16).Value = hd.Tgtttbso;
+                    wsT.Cell(rT, 17).Value = hd.Dvtte;
+                    wsT.Cell(rT, 18).Value = hd.Tgia;
+                    wsT.Cell(rT, 19).Value = TrangThaiHD(hd.Tthai);
+                    wsT.Cell(rT, 20).Value = KetQua(hd.Ttxly);
+                    wsT.Cell(rT, 21).Value = nccCol;
+                    wsT.Cell(rT, 22).Value = linkCol;
+                    wsT.Cell(rT, 23).Value = maCol;
+                    wsT.Cell(rT, 24).Value = hdLienQuanCol;
+                    wsT.Cell(rT, 25).Value = ttLienQuanCol;
                     rT++;
                 }
 
@@ -665,8 +686,10 @@ namespace minhnhat_tool
                     if (Cancelled) break;
                     var chunkEnd = chunkStart.AddMonths(1).AddDays(-1);
                     if (chunkEnd > to) chunkEnd = to;
+                    int soFar = all.Count;
                     var part = await _tct.QueryInvoicesAsync(_token, _loaiHD,
-                                   chunkStart.ToString("dd/MM/yyyy"), chunkEnd.ToString("dd/MM/yyyy"));
+                                   chunkStart.ToString("dd/MM/yyyy"), chunkEnd.ToString("dd/MM/yyyy"),
+                                   n => txtProgress.Text = $"Đang tải hóa đơn... (đã có {soFar + n})");
                     all.AddRange(part);
                     txtProgress.Text = $"Đang tải hóa đơn... (đã có {all.Count})";
                     chunkStart = chunkEnd.AddDays(1);

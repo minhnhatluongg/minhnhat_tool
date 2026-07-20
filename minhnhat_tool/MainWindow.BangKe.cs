@@ -274,10 +274,14 @@ namespace minhnhat_tool
                     {
                         foreach (var it in arr.EnumerateArray())
                         {
+                            int tchat = (int)ExD(it, "tchat");   // 3 = chiết khấu (trừ), 4 = ghi chú (bỏ)
+                            if (tchat == 4) continue;
+                            decimal sign = tchat == 3 ? -1m : 1m;
                             decimal thtien = (decimal)ExD(it, "thtien");
                             decimal tsuat = (decimal)ExD(it, "tsuat");
                             decimal tthue = (decimal)ExD(it, "tthue");
                             if (tthue <= 0) tthue = Math.Round(thtien * tsuat, 0);
+                            thtien *= sign; tthue *= sign;
                             string lt = ExS(it, "ltsuat");
                             string st = SuatText(lt, tsuat);
                             outp.Add(new LineKe
