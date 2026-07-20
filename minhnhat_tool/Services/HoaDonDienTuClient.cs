@@ -129,23 +129,22 @@ namespace minhnhat_tool.Services
                 using var doc = JsonDocument.Parse(json);
                 var root = doc.RootElement;
                 bool pos = prefix == "sco-query";   // hóa đơn khởi tạo từ máy tính tiền
-                int newCount = 0;
                 if (root.TryGetProperty("datas", out var datas) && datas.ValueKind == JsonValueKind.Array)
                     foreach (var it in datas.EnumerateArray())
                     {
                         var hd = ParseHoaDon(it);
                         hd.MayTinhTien = pos;
+                        // Dedup phòng con trỏ trả trùng ở ranh giới trang — KHÔNG làm mất HĐ thật.
                         if (seenPage.Add($"{hd.Nbmst}|{hd.Khhdon}|{hd.Shdon}|{hd.Khmshdon}"))
-                        {
                             list.Add(hd);
-                            newCount++;
-                        }
                     }
 
                 onProgress?.Invoke(baseCount + list.Count);   // cập nhật tiến độ sau mỗi trang
+                string? prevState = state;   // con trỏ vừa dùng cho trang này
                 state = root.TryGetProperty("state", out var st) && st.ValueKind == JsonValueKind.String ? st.GetString() : null;
                 firstPage = false;
-                if (newCount == 0) break;   // trang không thêm HĐ mới -> hết dữ liệu (chống lặp vô hạn)
+                // CHỈ dừng khi con trỏ KHÔNG tiến (lặp thật) — không dừng vì "trang trùng" kẻo sót trang sau.
+                if (!string.IsNullOrEmpty(state) && state == prevState) break;
                 if (!string.IsNullOrEmpty(state)) await Task.Delay(200);   // giãn nhẹ giữa các trang để đỡ bị chặn
             }
             while (!string.IsNullOrEmpty(state) && ++guard < 200);
