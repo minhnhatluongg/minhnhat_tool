@@ -171,7 +171,7 @@ namespace minhnhat_tool
                     try
                     {
                         if (Cancelled) return;
-                        var (_, _, status) = await _tct.TcnntLookupAsync(mst);
+                        var (_, _, status) = await _tct.TcnntLookupAsync(mst, Ct);
                         bool risk = !string.IsNullOrEmpty(status)
                                     && status.IndexOf("đang hoạt động", StringComparison.OrdinalIgnoreCase) < 0;
                         // Code sau await chạy trên UI thread -> ghi cache an toàn, không cần khóa
@@ -339,6 +339,16 @@ namespace minhnhat_tool
             // Luôn tải chi tiết (nếu đã đăng nhập) để có Mã tra cứu + dòng hàng — bản đầy đủ
             bool canDetail = !string.IsNullOrEmpty(_token);
 
+            // 2 cột "liên quan" tốn THÊM 2 lượt gọi TCT cho MỖI hóa đơn mà hầu như luôn rỗng -> để người dùng chọn
+            bool layLienQuan = false;
+            if (canDetail)
+                layLienQuan = MessageBox.Show(
+                    "Có lấy thêm 2 cột 'Hóa đơn liên quan' và 'Thông tin liên quan' không?\n\n" +
+                    "• Chọn KHÔNG (khuyên dùng): nhanh hơn nhiều. Hai cột này hầu như luôn rỗng,\n" +
+                    "  chỉ có dữ liệu khi hóa đơn bị điều chỉnh / thay thế / sai sót.\n" +
+                    "• Chọn CÓ: đầy đủ nhưng phải gọi thêm 2 lượt cho mỗi hóa đơn.",
+                    "Xuất nhanh hay đầy đủ?", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+
             ShowProgress($"Đang xuất Excel {rows.Count} hóa đơn...");
             try
             {
@@ -369,86 +379,165 @@ namespace minhnhat_tool
                                 "Tỷ lệ CK (%)","Tiền chiết khấu","Thành tiền chưa thuế","Thuế suất","Tiền thuế","Thành tiền sau thuế" };
                 for (int c = 0; c < hC.Length; c++) wsC.Cell(1, c + 1).Value = hC[c];
 
+                // ===== GIAI DOAN 1: tai CHI TIET SONG SONG =====
+                // Truoc day chay TUAN TU tung to (moi to vai luot goi + delay) nen rat cham.
+                var djs = new string[rows.Count];
+                var lqs = new string[rows.Count];
+                var ttlqs = new string[rows.Count];
+                for (int k = 0; k < rows.Count; k++) { djs[k] = ""; lqs[k] = ""; ttlqs[k] = ""; }
+
+                if (canDetail)
+                {
+                    // Dùng CHUNG bộ tải chi tiết ưu tiên độ chính xác (2 luồng + quét lại tuần tự)
+                    djs = await LayChiTietDayDuAsync(rows);
+
+                    // 2 cột "liên quan" (tùy chọn) — chạy riêng, cũng đi nhẹ để khỏi bị chặn
+                    if (layLienQuan && !Cancelled)
+                    {
+                        int done = 0;
+                        using var sem = new System.Threading.SemaphoreSlim(2);
+                        var tasks = new List<Task>();
+                        for (int k = 0; k < rows.Count; k++)
+                        {
+                            int idx = k;
+                            tasks.Add(Task.Run(async () =>
+                            {
+                                await sem.WaitAsync(Ct);
+                                try
+                                {
+                                    var hd2 = rows[idx].Raw!;
+                                    try { lqs[idx] = TomTatLienQuan(await _tct.GetRelativeAsync(_token, hd2, Ct)); }
+                                    catch (OperationCanceledException) { throw; } catch { }
+                                    try { ttlqs[idx] = TomTatLienQuan(await _tct.GetRelatedAsync(_token, hd2, Ct)); }
+                                    catch (OperationCanceledException) { throw; } catch { }
+                                }
+                                finally
+                                {
+                                    sem.Release();
+                                    int n = System.Threading.Interlocked.Increment(ref done);
+                                    Dispatcher.Invoke(() => SetProgress(n, rows.Count, $"Đang lấy thông tin liên quan {n}/{rows.Count}..."));
+                                }
+                            }, Ct));
+                        }
+                        try { await Task.WhenAll(tasks); }
+                        catch (OperationCanceledException) { }   // Huy -> van xuat phan da tai duoc
+                    }
+                }
+
+                // ===== GIAI DOAN 2: tra Nha cung cap HDDT - MOI MST DUNG 1 LAN =====
+                // Nut that cu: tra TRUOT khong duoc nho, nen moi hoa don lai goi lai tracuunnt
+                // (max_tries=12&delay=1.5 -> toi ~18 giay/lan) => 37 hoa don mat ~15 phut.
+                var canTra = new HashSet<string>();
+                foreach (var d in djs)
+                {
+                    if (string.IsNullOrEmpty(d)) continue;
+                    try
+                    {
+                        var rr = JsonDocument.Parse(d).RootElement;
+                        string m = ExS(rr, "msttcgp");
+                        if (m.Length > 0 && !_tvanMap.ContainsKey(m) && !_nccTenCache.ContainsKey(m)
+                            && !Services.NccStore.TryGet(m, out _))
+                            canTra.Add(m);
+                    }
+                    catch { }
+                }
+                if (canTra.Count > 0 && !Cancelled)
+                {
+                    int dn = 0;
+                    SetProgress(0, canTra.Count, $"Đang tra {canTra.Count} nhà cung cấp HĐĐT...");
+                    using var sem2 = new System.Threading.SemaphoreSlim(4);
+                    var t2 = new List<Task>();
+                    foreach (var m0 in canTra)
+                    {
+                        string m = m0;
+                        t2.Add(Task.Run(async () =>
+                        {
+                            await sem2.WaitAsync(Ct);
+                            try
+                            {
+                                var (ten, _, _) = await _tct.TcnntLookupAsync(m, Ct);
+                                lock (_nccTenCache)
+                                {
+                                    _nccTenCache[m] = ten ?? "";   // NHO CA KHI TRUOT -> khong tra lai
+                                    if (!string.IsNullOrEmpty(ten)) Services.NccStore.Put(m, ten, "");
+                                }
+                            }
+                            catch (OperationCanceledException) { }
+                            catch { lock (_nccTenCache) _nccTenCache[m] = ""; }
+                            finally
+                            {
+                                sem2.Release();
+                                int n = System.Threading.Interlocked.Increment(ref dn);
+                                Dispatcher.Invoke(() => SetProgress(n, canTra.Count, $"Đang tra nhà cung cấp {n}/{canTra.Count}..."));
+                            }
+                        }, Ct));
+                    }
+                    try { await Task.WhenAll(t2); } catch (OperationCanceledException) { }
+                }
+
+                // ===== GIAI DOAN 3: ghi Excel (KHONG goi mang nua -> chay rat nhanh) =====
+                SetProgress(0, rows.Count, "Đang ghi file Excel...");
                 int rT = headRowT + 1, rC = 2, i = 0;
                 foreach (var row in rows)
                 {
-                    if (Cancelled) break;
                     i++;
                     var hd = row.Raw!;
-                    string nccCol = "", linkCol = "", maCol = "", hdLienQuanCol = "", ttLienQuanCol = "";
+                    string nccCol = "", linkCol = "", maCol = "";
+                    string dj = djs[i - 1], hdLienQuanCol = lqs[i - 1], ttLienQuanCol = ttlqs[i - 1];
 
-                    if (canDetail)
+                    int soDong = 0;   // dem so dong hang da ghi cho HD nay (0 -> ghi dong du phong)
+                    try
                     {
-                        SetProgress(i, rows.Count, $"Đang xuất Excel {i}/{rows.Count} hóa đơn...");
-                        // Retry vì TCT hay chặn khi gọi chi tiết liên tục
-                        string dj = "";
-                        for (int a = 0; a < 3 && string.IsNullOrEmpty(dj); a++)
+                        if (!string.IsNullOrEmpty(dj))
                         {
-                            if (a > 0) await Task.Delay(500 * a);
-                            try { dj = await _tct.GetInvoiceDetailAsync(_token, hd); } catch { dj = ""; }
+                            var r = JsonDocument.Parse(dj).RootElement;
+                            // Nha cung cap HDDT + link tra cuu + ma tra cuu (da tra san o GD2 -> tuc thi)
+                            maCol = TimMaTraCuu(r);
+                            var ncc = ResolveNccSync(ExS(r, "msttcgp"), hd.Nbmst, ExS(r, "id"), maCol);
+                            nccCol = ncc.ten; linkCol = ncc.link;
+                            if (r.TryGetProperty("hdhhdvu", out var arr) && arr.ValueKind == JsonValueKind.Array)
+                                foreach (var it in arr.EnumerateArray())
+                                {
+                                    int tchat = (int)ExD(it, "tchat");         // 1=HHDV, 2=khuyen mai, 3=chiet khau, 4=ghi chu
+                                    if (tchat == 4) continue;                  // dong dien giai/ghi chu: khong co tien
+                                    double sign = tchat == 3 ? -1.0 : 1.0;     // chiet khau thuong mai -> TRU vao tong
+                                    double thtien = ExD(it, "thtien");        // thanh tien chua thue
+                                    double tsuat  = ExD(it, "tsuat");          // thue suat dang so (0.08)
+                                    double tthue  = ExD(it, "tthue");          // tien thue/dong (hay null)
+                                    if (tthue <= 0) tthue = Math.Round(thtien * tsuat, 0);  // null -> tu tinh
+                                    thtien *= sign; tthue *= sign;             // dong chiet khau -> gia tri am
+                                    wsC.Cell(rC, 1).Value  = hd.Khhdon;
+                                    wsC.Cell(rC, 2).Value  = hd.Shdon;
+                                    wsC.Cell(rC, 3).Value  = ExS(it, "stt");
+                                    wsC.Cell(rC, 4).Value  = ExS(it, "ten");
+                                    wsC.Cell(rC, 5).Value  = ExS(it, "dvtinh");
+                                    wsC.Cell(rC, 6).Value  = ExD(it, "sluong");
+                                    wsC.Cell(rC, 7).Value  = ExD(it, "dgia");        // don gia chua thue
+                                    wsC.Cell(rC, 8).Value  = ExD(it, "tlckhau");     // ty le chiet khau %
+                                    wsC.Cell(rC, 9).Value  = ExD(it, "stckhau");     // tien chiet khau
+                                    wsC.Cell(rC, 10).Value = thtien;                 // thanh tien chua thue
+                                    wsC.Cell(rC, 11).Value = ExS(it, "ltsuat");      // thue suat "8%"
+                                    wsC.Cell(rC, 12).Value = tthue;                  // tien thue
+                                    wsC.Cell(rC, 13).Value = thtien + tthue;         // thanh tien sau thue
+                                    rC++; soDong++;
+                                }
                         }
-                        int soDong = 0;   // đếm số dòng hàng đã ghi cho HĐ này (0 -> ghi dòng dự phòng)
-                        try
-                        {
-                            if (!string.IsNullOrEmpty(dj))
-                            {
-                                var r = JsonDocument.Parse(dj).RootElement;
-                                // Nhà cung cấp HĐĐT + link tra cứu + mã tra cứu
-                                if (r.TryGetProperty("cttkhac", out var ctArr) && ctArr.ValueKind == JsonValueKind.Array)
-                                    foreach (var cti in ctArr.EnumerateArray())
-                                        if (cti.TryGetProperty("ttruong", out var ctFld) && (ctFld.GetString() ?? "").StartsWith("Mã tra cứu"))
-                                            maCol = ExS(cti, "dlieu");
-                                var ncc = await ResolveNccAsync(ExS(r, "msttcgp"), hd.Nbmst, ExS(r, "id"), maCol);
-                                nccCol = ncc.ten; linkCol = ncc.link;
-                                if (r.TryGetProperty("hdhhdvu", out var arr) && arr.ValueKind == JsonValueKind.Array)
-                                    foreach (var it in arr.EnumerateArray())
-                                    {
-                                        int tchat = (int)ExD(it, "tchat");         // 1=HHDV, 2=khuyến mại, 3=chiết khấu, 4=ghi chú
-                                        if (tchat == 4) continue;                  // dòng diễn giải/ghi chú: không có tiền
-                                        double sign = tchat == 3 ? -1.0 : 1.0;     // chiết khấu thương mại -> TRỪ vào tổng
-                                        double thtien = ExD(it, "thtien");        // thành tiền chưa thuế
-                                        double tsuat  = ExD(it, "tsuat");          // thuế suất dạng số (0.08)
-                                        double tthue  = ExD(it, "tthue");          // tiền thuế/dòng (hay null)
-                                        if (tthue <= 0) tthue = Math.Round(thtien * tsuat, 0);  // null -> tự tính
-                                        thtien *= sign; tthue *= sign;             // dòng chiết khấu -> giá trị âm
-                                        wsC.Cell(rC, 1).Value  = hd.Khhdon;
-                                        wsC.Cell(rC, 2).Value  = hd.Shdon;
-                                        wsC.Cell(rC, 3).Value  = ExS(it, "stt");
-                                        wsC.Cell(rC, 4).Value  = ExS(it, "ten");
-                                        wsC.Cell(rC, 5).Value  = ExS(it, "dvtinh");
-                                        wsC.Cell(rC, 6).Value  = ExD(it, "sluong");
-                                        wsC.Cell(rC, 7).Value  = ExD(it, "dgia");        // đơn giá chưa thuế
-                                        wsC.Cell(rC, 8).Value  = ExD(it, "tlckhau");     // tỷ lệ chiết khấu %
-                                        wsC.Cell(rC, 9).Value  = ExD(it, "stckhau");     // tiền chiết khấu
-                                        wsC.Cell(rC, 10).Value = thtien;                 // thành tiền chưa thuế
-                                        wsC.Cell(rC, 11).Value = ExS(it, "ltsuat");      // thuế suất "8%"
-                                        wsC.Cell(rC, 12).Value = tthue;                  // tiền thuế
-                                        wsC.Cell(rC, 13).Value = thtien + tthue;         // thành tiền sau thuế
-                                        rC++; soDong++;
-                                    }
-                            }
-                        }
-                        catch { }
-
-                        // Không lấy được dòng hàng (TCT chặn chi tiết) -> ghi 1 dòng ở mức hóa đơn
-                        // để tổng cột ChiTiet KHÔNG bị thiếu so với sheet TongHop.
-                        if (soDong == 0)
-                        {
-                            wsC.Cell(rC, 1).Value  = hd.Khhdon;
-                            wsC.Cell(rC, 2).Value  = hd.Shdon;
-                            wsC.Cell(rC, 4).Value  = "(chưa lấy được chi tiết)";
-                            wsC.Cell(rC, 10).Value = (double)hd.Tgtcthue;
-                            wsC.Cell(rC, 12).Value = (double)hd.Tgtthue;
-                            wsC.Cell(rC, 13).Value = (double)hd.Tgtttbso;
-                            rC++;
-                        }
-
-                        // Hóa đơn liên quan + Thông tin liên quan (thường rỗng, chỉ có khi HĐ bị điều chỉnh/thay thế/sai sót)
-                        try { hdLienQuanCol = TomTatLienQuan(await _tct.GetRelativeAsync(_token, hd)); } catch { }
-                        try { ttLienQuanCol = TomTatLienQuan(await _tct.GetRelatedAsync(_token, hd)); } catch { }
-
-                        await Task.Delay(200);   // giãn cách để không bị TCT chặn
                     }
+                    catch { }
+
+                    // Khong lay duoc dong hang (TCT chan chi tiet) -> ghi 1 dong o muc hoa don
+                    // de tong cot ChiTiet KHONG bi thieu so voi sheet TongHop.
+                    if (soDong == 0)
+                    {
+                        wsC.Cell(rC, 1).Value  = hd.Khhdon;
+                        wsC.Cell(rC, 2).Value  = hd.Shdon;
+                        wsC.Cell(rC, 4).Value  = "(chưa lấy được chi tiết)";
+                        wsC.Cell(rC, 10).Value = (double)hd.Tgtcthue;
+                        wsC.Cell(rC, 12).Value = (double)hd.Tgtthue;
+                        wsC.Cell(rC, 13).Value = (double)hd.Tgtttbso;
+                        rC++;
+                    }
+
 
                     wsT.Cell(rT, 1).Value = i;
                     wsT.Cell(rT, 2).Value = hd.Khmshdon;
@@ -486,6 +575,102 @@ namespace minhnhat_tool
             }
             catch (Exception ex) { MessageBox.Show("Lỗi xuất Excel: " + ex.Message); }
             finally { HideProgress(); }
+        }
+
+        // Mỗi nhà cung cấp HĐĐT đặt nhãn "mã tra cứu" một kiểu -> so khớp KHÔNG DẤU, không phân biệt hoa thường.
+        // (a) Nhãn tiếng Việt tường minh — chắc chắn nhất.
+        private static readonly string[] _nhanMaTraCuu =
+        {
+            "ma tra cuu", "matracuu", "ma so bi mat", "so bi mat", "ma bi mat",
+            "so bao mat", "ma bao mat", "ma nhan hoa don", "ma xac thuc", "ma kiem tra"
+        };
+        // (b) Khóa kỹ thuật NCC dùng trong TTKhac (MISA=TransactionID, Viettel=reservationCode, ...).
+        // So khớp CHÍNH XÁC (đã bỏ dấu, thường) để tránh nhận nhầm field khác.
+        private static readonly string[] _khoaMaKyThuat =
+        {
+            "transactionid", "reservationcode", "fkey", "lookupcode", "securitycode", "sobaomat", "mabaomat"
+        };
+
+        /// <summary>Dò "Mã tra cứu" trong mảng cttkhac của JSON chi tiết (nhãn khác nhau tùy NCC).
+        /// Đây là chìa khóa để vào cổng tra cứu của NCC tải PDF gốc.</summary>
+        private static string TimMaTraCuu(JsonElement r)
+        {
+            if (!r.TryGetProperty("cttkhac", out var arr) || arr.ValueKind != JsonValueKind.Array) return "";
+            var pairs = new List<(string nhan, string dlieu)>();
+            foreach (var it in arr.EnumerateArray())
+            {
+                string nhan = BoDau(ExS(it, "ttruong"));
+                string dlieu = ExS(it, "dlieu").Trim();
+                if (nhan.Length > 0 && dlieu.Length > 0) pairs.Add((nhan, dlieu));
+            }
+            // 1. Nhãn tiếng Việt tường minh -> 2. khóa kỹ thuật (TransactionID...)
+            foreach (var p in pairs) if (_nhanMaTraCuu.Any(k => p.nhan.Contains(k))) return p.dlieu;
+            foreach (var p in pairs) if (_khoaMaKyThuat.Contains(p.nhan)) return p.dlieu;
+            return "";
+        }
+
+        /// <summary>Dò "Mã tra cứu" trong XML gốc (TTKhac/TTin) — CHÍNH XÁC hơn JSON detail vì XML
+        /// luôn chứa đầy đủ thông tin khác đã ký, còn cttkhac trong JSON hay bị rỗng.
+        /// Truyền msttcgp để xử lý đúng theo từng NCC (vd MISA: mã = TransactionID = thuộc tính Id của DLHDon).</summary>
+        private static string TimMaTraCuuTuXml(string xml, string msttcgp = "")
+        {
+            if (string.IsNullOrWhiteSpace(xml)) return "";
+            try
+            {
+                var doc = System.Xml.Linq.XDocument.Parse(xml);
+                var pairs = doc.Descendants().Where(e => e.Name.LocalName == "TTin")
+                    .Select(tt => (
+                        nhan: BoDau(tt.Elements().FirstOrDefault(e => e.Name.LocalName == "TTruong")?.Value ?? ""),
+                        dlieu: (tt.Elements().FirstOrDefault(e => e.Name.LocalName == "DLieu")?.Value ?? "").Trim()))
+                    .Where(p => p.nhan.Length > 0 && p.dlieu.Length > 0)
+                    .ToList();
+
+                // 1. Nhãn tiếng Việt tường minh -> 2. khóa kỹ thuật (MISA=TransactionID, Viettel=reservationCode...)
+                foreach (var p in pairs) if (_nhanMaTraCuu.Any(k => p.nhan.Contains(k))) return p.dlieu;
+                foreach (var p in pairs) if (_khoaMaKyThuat.Contains(p.nhan)) return p.dlieu;
+
+                // 3. MISA: mã tra cứu = thuộc tính Id của DLHDon (= TransactionID, cũng nằm trong QR)
+                if (msttcgp == "0101243150")
+                {
+                    string? id = doc.Descendants().FirstOrDefault(e => e.Name.LocalName == "DLHDon")?.Attribute("Id")?.Value;
+                    if (!string.IsNullOrWhiteSpace(id)) return id.Trim();
+                }
+            }
+            catch { }
+            return "";
+        }
+
+        /// <summary>Lấy nội dung XML text từ bytes export-xml (giải nén nếu là file zip "PK").</summary>
+        private static string XmlTuBytes(byte[] bytes)
+        {
+            if (bytes == null || bytes.Length == 0) return "";
+            if (bytes.Length > 1 && bytes[0] == 0x50 && bytes[1] == 0x4B)   // "PK" = zip
+            {
+                try
+                {
+                    using var ms = new System.IO.MemoryStream(bytes);
+                    using var zip = new System.IO.Compression.ZipArchive(ms, System.IO.Compression.ZipArchiveMode.Read);
+                    var entry = zip.Entries.FirstOrDefault(e => e.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase));
+                    if (entry == null) return "";
+                    using var s = entry.Open();
+                    using var sr = new System.IO.StreamReader(s, System.Text.Encoding.UTF8);
+                    return sr.ReadToEnd();
+                }
+                catch { return ""; }
+            }
+            return System.Text.Encoding.UTF8.GetString(bytes);
+        }
+
+        /// <summary>Bỏ dấu tiếng Việt + hạ chữ thường để so khớp nhãn cho chắc.</summary>
+        private static string BoDau(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return "";
+            string norm = s.ToLowerInvariant().Replace('đ', 'd').Normalize(System.Text.NormalizationForm.FormD);
+            var sb = new System.Text.StringBuilder(norm.Length);
+            foreach (char c in norm)
+                if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.NonSpacingMark)
+                    sb.Append(c);
+            return sb.ToString().Normalize(System.Text.NormalizationForm.FormC);
         }
 
         private static string ExS(JsonElement e, string n)
@@ -574,10 +759,29 @@ namespace minhnhat_tool
             ["0100684378"] = ("Tập đoàn Bưu chính Viễn thông VN (VNPT)", "https://{nbmst}-tt78.vnpt-invoice.com.vn"),
             ["0100109106"] = ("Tập đoàn CN - Viễn thông Quân đội (Viettel)", "https://vinvoice.viettel.vn/utilities/invoice-search"),
             ["0106026495"] = ("Công ty TNHH HĐĐT M-Invoice", "https://tracuuhoadon.minvoice.com.vn/tra-cuu"),
-            ["0105987432"] = ("Công ty CP Đầu tư công nghệ EasyInvoice", "http://tracuu.easyinvoice.com.vn"),
+            ["0105987432"] = ("Công ty CP Đầu tư công nghệ EasyInvoice", "https://tracuu.easyinvoice.vn/Search/Index"),
             ["0106713804"] = ("Công ty Cổ phần Hilo Việt Nam", "https://tracuuhddt78.hilo.com.vn/"),
             ["0312303803"] = ("Công ty TNHH Win Tech Solution", "https://chungtu.wininvoice.vn/ct_ktt"),
         };
+
+        // Nhớ tên NCC theo msttcgp trong PHIÊN — nhớ CẢ khi tra trượt (giá trị "")
+        // để không lặp lại lời gọi tracuunnt ~18 giây cho từng hóa đơn.
+        private readonly Dictionary<string, string> _nccTenCache = new();
+
+        /// <summary>Bản KHÔNG gọi mạng của ResolveNccAsync — dùng lúc ghi Excel,
+        /// vì các MST lạ đã được tra sẵn (song song, mỗi MST 1 lần) ở giai đoạn 2.</summary>
+        private (string ten, string link) ResolveNccSync(string msttcgp, string nbmst, string id, string ma)
+        {
+            if (string.IsNullOrEmpty(msttcgp)) return ("", "");
+            if (_tvanMap.TryGetValue(msttcgp, out var t))
+                return ($"{msttcgp} - {t.ten}",
+                        t.url.Replace("{id}", id).Replace("{nbmst}", nbmst).Replace("{ma}", ma));
+            if (Services.NccStore.TryGet(msttcgp, out var cached) && !string.IsNullOrEmpty(cached.Ten))
+                return ($"{msttcgp} - {cached.Ten}", cached.Link);
+            if (_nccTenCache.TryGetValue(msttcgp, out var ten) && !string.IsNullOrEmpty(ten))
+                return ($"{msttcgp} - {ten}", "");
+            return (msttcgp, "");   // không tra được -> chỉ hiện MST
+        }
 
         /// <summary>Tìm Nhà cung cấp HĐĐT theo thứ tự: (1) bảng TVAN cứng -> tức thì,
         /// (2) cache file NccStore -> tức thì, (3) API tracuunnt (có anti-bot, chậm) -> lưu cache.</summary>
@@ -597,7 +801,7 @@ namespace minhnhat_tool
                 return ($"{msttcgp} - {cached.Ten}", cached.Link);
 
             // (3) Chưa biết -> gọi API tracuunnt (chậm vì anti-bot) rồi nhớ luôn
-            var (ten, _, _) = await _tct.TcnntLookupAsync(msttcgp);
+            var (ten, _, _) = await _tct.TcnntLookupAsync(msttcgp, Ct);
             if (!string.IsNullOrEmpty(ten))
             {
                 Services.NccStore.Put(msttcgp, ten, "");   // link rỗng: NCC ngoài bảng chưa có template tra cứu
@@ -625,7 +829,7 @@ namespace minhnhat_tool
             barProgress.IsIndeterminate = false;
             barProgress.Maximum = total <= 0 ? 1 : total;
             barProgress.Value = cur;
-            txtProgress.Text = text;
+            if (!Cancelled) txtProgress.Text = text;   // đã bấm Hủy -> giữ chữ "Đang hủy...", không ghi đè
         }
         private void HideProgress()
         {
@@ -635,6 +839,9 @@ namespace minhnhat_tool
         }
         // True nếu người dùng đã bấm Hủy
         private bool Cancelled => _cts?.IsCancellationRequested ?? false;
+
+        // Token để luồn xuống tầng HTTP -> bấm Hủy là cắt ngay cả khi đang chờ mạng/đang retry
+        private System.Threading.CancellationToken Ct => _cts?.Token ?? System.Threading.CancellationToken.None;
 
         private void btnCancel_Click(object sender, RoutedEventArgs e)
         {
@@ -670,15 +877,18 @@ namespace minhnhat_tool
             }
             btnDongBo.IsEnabled = false;
             btnDongBo.Content = "⏳ Đang tải...";
-            ShowProgress("Đang đăng nhập & tải hóa đơn từ Tổng cục Thuế...", indeterminate: true);
+            string chieu = _loaiHD == "purchase" ? "đầu vào (mua vào)" : "đầu ra (bán ra)";
+            ShowProgress($"🔐 Bước 1/2: Đang đăng nhập Tổng cục Thuế...", indeterminate: true);
+            // Khai báo ngoài try để khi bấm Hủy vẫn giữ được phần đã tải
+            var all = new List<HoaDonInfo>();
             try
             {
-                _token = await _tct.LoginAsync(Session.Mst, Session.Password);
+                _token = await _tct.LoginAsync(Session.Mst, Session.Password, Ct);
                 _lastIsMuaVao = _loaiHD == "purchase";
                 _lastLoai = _loaiHD;
+                if (!Cancelled) txtProgress.Text = $"📥 Bước 2/2: Đang đồng bộ hóa đơn {chieu}...";
 
                 // Chia khoảng ngày thành từng tháng (TCT giới hạn <= 1 tháng/lần) -> hỗ trợ cả Quý/Năm
-                var all = new List<HoaDonInfo>();
                 var chunkStart = dpTuNgay.SelectedDate.Value;
                 var to = dpDenNgay.SelectedDate.Value;
                 while (chunkStart <= to)
@@ -687,17 +897,26 @@ namespace minhnhat_tool
                     var chunkEnd = chunkStart.AddMonths(1).AddDays(-1);
                     if (chunkEnd > to) chunkEnd = to;
                     int soFar = all.Count;
+                    string thang = chunkStart.ToString("MM/yyyy");
                     var part = await _tct.QueryInvoicesAsync(_token, _loaiHD,
                                    chunkStart.ToString("dd/MM/yyyy"), chunkEnd.ToString("dd/MM/yyyy"),
-                                   n => txtProgress.Text = $"Đang tải hóa đơn... (đã có {soFar + n})");
+                                   (nguon, n) => { if (!Cancelled) txtProgress.Text = $"📥 Đang tải {nguon} tháng {thang}... (đã có {soFar + n})"; },
+                                   Ct);
                     all.AddRange(part);
-                    txtProgress.Text = $"Đang tải hóa đơn... (đã có {all.Count})";
+                    if (!Cancelled) txtProgress.Text = $"📥 Đang đồng bộ {chieu}... (đã có {all.Count})";
                     chunkStart = chunkEnd.AddDays(1);
                 }
 
                 FillGrid(all, _lastIsMuaVao);
                 MessageBox.Show($"Đã tải {all.Count} hóa đơn {(_lastIsMuaVao ? "MUA VÀO" : "BÁN RA")} của {Session.TenDN}.",
                                 "Đồng bộ xong", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (OperationCanceledException)
+            {
+                // Người dùng bấm Hủy giữa chừng — không phải lỗi
+                FillGrid(all, _lastIsMuaVao);
+                MessageBox.Show($"Đã hủy. Giữ lại {all.Count} hóa đơn đã tải được.",
+                                "Đã hủy", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
             {

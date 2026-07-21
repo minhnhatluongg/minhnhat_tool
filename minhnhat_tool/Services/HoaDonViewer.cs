@@ -24,8 +24,9 @@ namespace minhnhat_tool.Services
       <head>
         <meta charset='UTF-8'/>
         <style>
+          * { box-sizing:border-box; }
           body { font-family:'Times New Roman',serif; background:#e9edf2; padding:22px; color:#111; font-size:14px; }
-          .inv { max-width:920px; margin:auto; background:#fff; border:1px solid #d0d7de; padding:34px 40px; }
+          .inv { max-width:920px; margin:auto; background:#fff; border:1px solid #d0d7de; padding:34px 40px; overflow-wrap:anywhere; }
           .top { display:flex; justify-content:space-between; align-items:flex-start; }
           .top .r { text-align:right; }
           h1 { text-align:center; font-size:23px; margin:6px 0 2px; }
@@ -34,8 +35,10 @@ namespace minhnhat_tool.Services
           .hr { border-top:1px solid #b7860b; margin:10px 0; }
           .fld { margin:2px 0; }
           .fld b { font-weight:bold; }
-          table { width:100%; border-collapse:collapse; margin-top:12px; font-size:13px; }
-          th,td { border:1px solid #333; padding:5px 7px; vertical-align:top; }
+          /* table-layout:fixed -> cột theo đúng tỉ lệ đặt sẵn, KHÔNG nới bảng tràn ra ngoài lề
+             khi gặp mã hàng dài không có chỗ ngắt (vd 01KXCQFY1D0KMY5GFFDC6EP5DP) */
+          table { width:100%; max-width:100%; border-collapse:collapse; margin-top:12px; font-size:13px; table-layout:fixed; }
+          th,td { border:1px solid #333; padding:5px 7px; vertical-align:top; overflow-wrap:anywhere; word-break:break-word; }
           th { background:#f3f4f6; text-align:center; font-weight:bold; }
           .c { text-align:center; } .r { text-align:right; }
           .tot td { border:1px solid #333; padding:5px 8px; }
@@ -43,8 +46,23 @@ namespace minhnhat_tool.Services
           .totleft { width:38%; } .totright { width:62%; }
           .big { font-weight:bold; }
           .words { font-style:italic; margin-top:6px; }
-          .sign { display:flex; justify-content:space-around; margin-top:30px; text-align:center; }
-          .valid { color:#15803d; border:1px solid #15803d; padding:6px 12px; display:inline-block; font-size:12px; }
+          /* Hai ô chữ ký CHIA ĐỀU 50/50. min-width:0 để tên công ty dài tự xuống dòng
+             trong ô của mình, không đẩy bẹp ô bên kia (trước đây space-around gây lệch). */
+          .sign { display:flex; margin-top:30px; text-align:center; gap:16px; align-items:flex-start; }
+          /* KHÔNG dùng selector con '>' vì XSLT escape thành &gt; -> hỏng luật CSS. Dùng class. */
+          .signcol { flex:1 1 0; min-width:0; overflow-wrap:anywhere; }
+          .valid { color:#15803d; border:1px solid #15803d; padding:6px 10px; display:inline-block;
+                   font-size:12px; max-width:100%; overflow-wrap:anywhere; text-align:center; }
+          /* In ra PDF/giấy khổ A4: bỏ nền + khung ngoài, cho khối hóa đơn dùng trọn bề ngang giấy
+             (trước đây .inv cố định 920px > vùng in A4 ~756px nên bị tràn/cắt lề) */
+          @page { size:A4; margin:10mm; }
+          @media print {
+            body { background:#fff; padding:0; font-size:12px; }
+            .inv { max-width:none; width:100%; border:none; padding:0; }
+            table { font-size:11px; margin-top:8px; }
+            th,td { padding:3px 4px; }
+            tr { page-break-inside:avoid; }
+          }
         </style>
       </head>
       <body>
@@ -81,6 +99,11 @@ namespace minhnhat_tool.Services
           <div class='fld'><b>Hình thức thanh toán:</b> <xsl:value-of select='nmua/@htttoan'/> &#160;&#160; <b>Đơn vị tiền tệ:</b> <xsl:value-of select='nmua/@dvtte'/></div>
 
           <table>
+            <colgroup>
+              <col style='width:4%'/><col style='width:9%'/><col style='width:8%'/><col style='width:27%'/>
+              <col style='width:7%'/><col style='width:6%'/><col style='width:10%'/><col style='width:8%'/>
+              <col style='width:7%'/><col style='width:14%'/>
+            </colgroup>
             <tr>
               <th>STT</th><th>Tính chất</th><th>Loại hàng hóa đặc trưng</th><th>Tên hàng hóa, dịch vụ</th>
               <th>Đơn vị tính</th><th>Số lượng</th><th>Đơn giá</th><th>Chiết khấu</th><th>Thuế suất</th><th>Thành tiền chưa có thuế GTGT</th>
@@ -117,8 +140,8 @@ namespace minhnhat_tool.Services
           <div class='words'>Số tiền viết bằng chữ: <xsl:value-of select='tienchu'/></div>
 
           <div class='sign'>
-            <div><b>NGƯỜI MUA HÀNG</b><br/><i>(Chữ ký số - nếu có)</i></div>
-            <div><b>NGƯỜI BÁN HÀNG</b><br/><span class='valid'>Signature Valid &#10003;<br/>Ký bởi: <xsl:value-of select='nban/@ten'/><br/>Ký ngày: <xsl:value-of select='ngayky'/></span></div>
+            <div class='signcol'><b>NGƯỜI MUA HÀNG</b><br/><i>(Chữ ký số - nếu có)</i></div>
+            <div class='signcol'><b>NGƯỜI BÁN HÀNG</b><br/><span class='valid'>Signature Valid &#10003;<br/>Ký bởi: <xsl:value-of select='nban/@ten'/><br/>Ký ngày: <xsl:value-of select='ngayky'/></span></div>
           </div>
         </div>
       </body>
@@ -126,10 +149,13 @@ namespace minhnhat_tool.Services
   </xsl:template>
 </xsl:stylesheet>";
 
+        /// <summary>Dựng HTML bản thể hiện hóa đơn (dùng chung cho Xem hóa đơn và xuất PDF hàng loạt).</summary>
+        public static string BuildHtml(HoaDonInfo hd, string tenDN, bool isMuaVao, string detailJson)
+            => Transform(BuildXml(hd, tenDN, isMuaVao, detailJson));
+
         public static void ShowInvoice(HoaDonInfo hd, string tenDN, bool isMuaVao, string detailJson)
         {
-            var xml = BuildXml(hd, tenDN, isMuaVao, detailJson);
-            string html = Transform(xml);
+            string html = BuildHtml(hd, tenDN, isMuaVao, detailJson);
             string path = Path.Combine(Path.GetTempPath(), $"hoadon_{hd.Shdon}_{Guid.NewGuid():N}.html");
             File.WriteAllText(path, html, new UTF8Encoding(true));
             Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
@@ -178,6 +204,9 @@ namespace minhnhat_tool.Services
                         foreach (var it in arr.EnumerateArray())
                         {
                             if (string.IsNullOrEmpty(tsuat)) tsuat = S(it, "ltsuat");
+                            // Giữ NGUYÊN số dương như bản thể hiện chuẩn: dòng chiết khấu được nhận biết
+                            // qua cột "Tính chất" (Chiết khấu thương mại), KHÔNG hiển thị số âm.
+                            // Số liệu chính xác để đối chiếu nằm ở XML gốc.
                             items.Add(new XElement("item",
                                 new XAttribute("stt", S(it, "stt")),
                                 new XAttribute("tinhchat", TinhChat((int)D(it, "tchat"))),

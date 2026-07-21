@@ -300,7 +300,13 @@
                     <ContextMenu>
                         <MenuItem Header="👁  Xem hóa đơn" Click="mnuXem_Click"/>
                         <MenuItem Header="📥  Tải XML gốc" Click="mnuTaiXml_Click"/>
-                        <MenuItem Header="📄  Lưu PDF (mở xem rồi Ctrl+P)" Click="mnuTaiPdf_Click"/>
+                        <MenuItem Header="📄  Lưu PDF 1 tờ (mở xem rồi Ctrl+P)" Click="mnuTaiPdf_Click"/>
+                        <Separator/>
+                        <MenuItem Header="📄  Xuất PDF (dòng đã chọn)" Click="mnuPdfChon_Click"/>
+                        <MenuItem Header="📄  Xuất PDF (tất cả)" Click="mnuPdf_Click"/>
+                        <Separator/>
+                        <MenuItem Header="📦  Xuất XML gốc (dòng đã chọn)" Click="mnuXmlChon_Click"/>
+                        <MenuItem Header="📦  Xuất XML gốc (tất cả)" Click="mnuXml_Click"/>
                         <Separator/>
                         <MenuItem Header="📊  Xuất Excel (dòng đã chọn)" Click="mnuExcelChon_Click"/>
                         <MenuItem Header="📊  Xuất Excel (tất cả)" Click="mnuExcel_Click"/>

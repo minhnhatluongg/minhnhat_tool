@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -47,13 +47,11 @@ namespace minhnhat_tool
                     SetProgress(i, rows.Count, $"Đang lấy chi tiết {i}/{rows.Count} hóa đơn...");
                     var hd = row.Raw!;
                     string dj = "";
-                    for (int a = 0; a < 3 && string.IsNullOrEmpty(dj); a++)
-                    {
-                        if (a > 0) await Task.Delay(500 * a);
-                        try { dj = await _tct.GetInvoiceDetailAsync(_token, hd); } catch { dj = ""; }
-                    }
+                    // GetInvoiceDetailAsync đã tự thử lại có giãn cách (ưu tiên lấy đủ chi tiết)
+                    try { dj = await _tct.GetInvoiceDetailAsync(_token, hd, Ct); }
+                    catch (OperationCanceledException) { throw; } catch { dj = ""; }
                     ParseLines(dj, hd, row.NgayLap, _lastIsMuaVao, lines);
-                    await Task.Delay(150);
+                    await Task.Delay(150, Ct);
                 }
 
                 using var wb = new XLWorkbook();
@@ -108,7 +106,7 @@ namespace minhnhat_tool
             {
                 if (Cancelled) break;
                 var e2 = s.AddMonths(1).AddDays(-1); if (e2 > den) e2 = den;
-                var part = await _tct.QueryInvoicesAsync(_token, loai, s.ToString("dd/MM/yyyy"), e2.ToString("dd/MM/yyyy"));
+                var part = await _tct.QueryInvoicesAsync(_token, loai, s.ToString("dd/MM/yyyy"), e2.ToString("dd/MM/yyyy"), null, Ct);
                 all.AddRange(part);
                 txtProgress.Text = $"{nhan}... (đã có {all.Count})";
                 s = e2.AddDays(1);

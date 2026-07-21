@@ -21,3 +21,18 @@ app_releases/
 # ===== OS =====
 Thumbs.db
 Desktop.ini
+
+# ===== DỮ LIỆU HÓA ĐƠN THẬT — TUYỆT ĐỐI KHÔNG ĐẨY LÊN (repo đang public) =====
+# Chứa MST, địa chỉ, số tài khoản ngân hàng, chữ ký số của doanh nghiệp thật.
+xml/
+/HoaDon_*.xlsx
+/PDF_*/
+/XML_*/
+*.pdf
+
+# ===== File tạm khi dò/test cổng tra cứu =====
+cap/
+cj*.txt
+resp*.bin
+o_*.bin
+tracuu.html
