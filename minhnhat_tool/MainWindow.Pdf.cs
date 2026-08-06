@@ -46,6 +46,7 @@ namespace minhnhat_tool
 
         private List<InvoiceRow>? ChonDong()
         {
+            NhuongCaoNen();   // dừng cào nền để không gọi TCT chồng nhau
             var sel = grdHoaDon.SelectedItems.Cast<InvoiceRow>().ToList();
             if (sel.Count == 0)
             { MessageBox.Show("Bôi đen các dòng cần xuất trước.\nGiữ Ctrl để chọn rời, giữ Shift để chọn 1 dải."); return null; }
@@ -55,6 +56,7 @@ namespace minhnhat_tool
         // ================= XUẤT PDF (chỉ PDF) =================
         private async Task XuatPdfAsync(List<InvoiceRow> rows)
         {
+            NhuongCaoNen();
             string? thuMuc = TaoThuMucLo("PDF", rows.Count);
             if (thuMuc == null) return;
 
@@ -108,6 +110,7 @@ namespace minhnhat_tool
         // ================= XUẤT XML GỐC (chỉ XML) =================
         private async Task XuatXmlAsync(List<InvoiceRow> rows)
         {
+            NhuongCaoNen();
             string? thuMuc = TaoThuMucLo("XML", rows.Count);
             if (thuMuc == null) return;
 

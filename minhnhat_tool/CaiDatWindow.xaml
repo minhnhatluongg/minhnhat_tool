@@ -1,0 +1,86 @@
+<Window x:Class="minhnhat_tool.CaiDatWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Cài đặt — Cào nền &amp; Cache" Height="600" Width="640"
+        Icon="app.ico" WindowStartupLocation="CenterOwner" Background="#0b0f1a">
+
+    <Window.Resources>
+        <Style x:Key="Btn" TargetType="Button">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="8">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="12,0"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Opacity" Value="0.9"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="bd" Property="Opacity" Value="0.4"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <StackPanel Margin="18">
+
+        <!-- CÀO NỀN -->
+        <Border Background="#111827" CornerRadius="12" Padding="18" Margin="0,0,0,14">
+            <StackPanel>
+                <TextBlock Text="🌙  Cào nền hằng ngày (làm ấm cache)" Foreground="#22d3ee"
+                           FontWeight="Bold" FontSize="15" Margin="0,0,0,10"/>
+                <TextBlock Foreground="#94a3b8" TextWrapping="Wrap" Margin="0,0,0,14"
+                           Text="Ban đêm/lúc rảnh app tự tải sẵn chi tiết + XML của mọi hóa đơn gần đây vào máy. Sáng ra xuất Excel/PDF gần như tức thì. Ưu tiên độ chính xác: tờ nào bị Thuế chặn sẽ để lần sau, không ép."/>
+
+                <CheckBox x:Name="chkBat" Content="  Bật cào nền tự động"
+                          Foreground="#e2e8f0" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,14"/>
+
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                    <TextBlock Text="Giờ chạy mỗi ngày:" Foreground="#94a3b8" VerticalAlignment="Center" Width="150"/>
+                    <ComboBox x:Name="cboGio" Width="90" Height="32" Background="#0f172a" Foreground="#0f172a"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                    <TextBlock Text="Làm ấm bao nhiêu ngày gần nhất:" Foreground="#94a3b8" VerticalAlignment="Center" Width="220"/>
+                    <TextBox x:Name="txtSoNgay" Width="70" Height="32" Background="#0f172a" Foreground="White"
+                             BorderBrush="#334155" Padding="8,0" VerticalContentAlignment="Center"/>
+                    <TextBlock Text="ngày" Foreground="#94a3b8" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                </StackPanel>
+
+                <TextBlock x:Name="lblTrangThai" Foreground="#facc15" TextWrapping="Wrap" Margin="0,0,0,12"/>
+
+                <StackPanel Orientation="Horizontal">
+                    <Button x:Name="btnChayNgay" Content="▶  Chạy ngay" Style="{StaticResource Btn}"
+                            Background="#2563eb" Height="40" Width="150" Click="btnChayNgay_Click"/>
+                    <Button x:Name="btnDungCao" Content="■  Dừng" Style="{StaticResource Btn}"
+                            Background="#dc2626" Height="40" Width="110" Margin="10,0,0,0"
+                            IsEnabled="False" Click="btnDungCao_Click"/>
+                </StackPanel>
+
+                <TextBlock Foreground="#64748b" TextWrapping="Wrap" Margin="0,14,0,0" FontSize="12"
+                           Text="Lưu ý: cào nền chỉ chạy khi app đang mở. Muốn sáng nào cũng có sẵn thì để app chạy qua đêm, hoặc bật app cùng Windows. Công ty nào chưa lưu mật khẩu sẽ bị bỏ qua."/>
+            </StackPanel>
+        </Border>
+
+        <!-- CACHE -->
+        <Border Background="#111827" CornerRadius="12" Padding="18">
+            <StackPanel>
+                <TextBlock Text="💾  Dữ liệu cache trên máy" Foreground="#22d3ee"
+                           FontWeight="Bold" FontSize="15" Margin="0,0,0,10"/>
+                <TextBlock x:Name="lblCache" Foreground="#94a3b8" TextWrapping="Wrap" Margin="0,0,0,14"/>
+                <Button x:Name="btnXoaCache" Content="🧹  Xóa cache (tải lại từ Tổng cục Thuế)"
+                        Style="{StaticResource Btn}" Background="#b45309" Height="40" Width="320"
+                        HorizontalAlignment="Left" Click="btnXoaCache_Click"/>
+            </StackPanel>
+        </Border>
+
+    </StackPanel>
+    </ScrollViewer>
+</Window>

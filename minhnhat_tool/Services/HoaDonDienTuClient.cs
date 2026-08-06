@@ -212,6 +212,11 @@ namespace minhnhat_tool.Services
         public async Task<(string json, ChiTietTrangThai tt)> LayChiTietAsync(
             string token, HoaDonInfo hd, int soLanThu, CancellationToken ct = default)
         {
+            // CACHE trước: hóa đơn bất biến -> khỏi tải lại. json rỗng đã cache = "không có chi tiết".
+            string key = HoaDonCache.Key(hd.Nbmst, hd.Khhdon, hd.Shdon, hd.Khmshdon);
+            if (HoaDonCache.TryDetail(key, out var cached))
+                return (cached, cached.Length == 0 ? ChiTietTrangThai.KhongCo : ChiTietTrangThai.ThanhCong);
+
             string url = $"{HDDT}/{ApiPrefix(hd)}/invoices/detail" +
                          $"?nbmst={Uri.EscapeDataString(hd.Nbmst)}&khhdon={Uri.EscapeDataString(hd.Khhdon)}" +
                          $"&shdon={Uri.EscapeDataString(hd.Shdon)}&khmshdon={Uri.EscapeDataString(hd.Khmshdon)}";
@@ -232,12 +237,13 @@ namespace minhnhat_tool.Services
                     {
                         string s = await resp.Content.ReadAsStringAsync(reqCts.Token);
                         // 200 + rỗng = TCT khẳng định không có chi tiết -> kết quả CUỐI CÙNG
-                        return string.IsNullOrWhiteSpace(s) ? ("", ChiTietTrangThai.KhongCo)
-                                                           : (s, ChiTietTrangThai.ThanhCong);
+                        bool coCt = !string.IsNullOrWhiteSpace(s);
+                        HoaDonCache.PutDetail(key, coCt ? s : "");   // cache kết quả CHẮC CHẮN (kể cả "không có")
+                        return coCt ? (s, ChiTietTrangThai.ThanhCong) : ("", ChiTietTrangThai.KhongCo);
                     }
                     // 404 = không tồn tại chi tiết -> kết quả cuối. Mọi mã khác (400/401/403/429/5xx)
                     // đều coi là BỊ CHẶN và phải thử lại — thà chậm còn hơn bỏ sót dữ liệu.
-                    if ((int)resp.StatusCode == 404) return ("", ChiTietTrangThai.KhongCo);
+                    if ((int)resp.StatusCode == 404) { HoaDonCache.PutDetail(key, ""); return ("", ChiTietTrangThai.KhongCo); }
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
                 catch (OperationCanceledException) { }   // quá 30s -> thử lại
@@ -265,9 +271,12 @@ namespace minhnhat_tool.Services
             return resp.IsSuccessStatusCode ? await resp.Content.ReadAsStringAsync(ct) : "";
         }
 
-        /// <summary>Tải XML gốc (có chữ ký số) của 1 hóa đơn -> bytes.</summary>
+        /// <summary>Tải XML gốc (có chữ ký số) của 1 hóa đơn -> bytes. Có cache bền (XML bất biến).</summary>
         public async Task<byte[]> ExportXmlAsync(string token, HoaDonInfo hd, CancellationToken ct = default)
         {
+            string key = HoaDonCache.Key(hd.Nbmst, hd.Khhdon, hd.Shdon, hd.Khmshdon);
+            if (HoaDonCache.TryXml(key, out var cached)) return cached;
+
             string url = $"{HDDT}/{ApiPrefix(hd)}/invoices/export-xml" +
                          $"?nbmst={Uri.EscapeDataString(hd.Nbmst)}&khhdon={Uri.EscapeDataString(hd.Khhdon)}" +
                          $"&shdon={Uri.EscapeDataString(hd.Shdon)}&khmshdon={Uri.EscapeDataString(hd.Khmshdon)}";
@@ -276,7 +285,9 @@ namespace minhnhat_tool.Services
             var resp = await http.SendAsync(req, ct);
             if (!resp.IsSuccessStatusCode)
                 throw new Exception($"Tải XML lỗi ({(int)resp.StatusCode}): {await resp.Content.ReadAsStringAsync(ct)}");
-            return await resp.Content.ReadAsByteArrayAsync(ct);
+            var bytes = await resp.Content.ReadAsByteArrayAsync(ct);
+            HoaDonCache.PutXml(key, bytes);   // chỉ cache khi tải THÀNH CÔNG
+            return bytes;
         }
 
         /// <summary>Tải PDF gốc của 1 hóa đơn -> bytes (endpoint đoán: export-pdf).</summary>

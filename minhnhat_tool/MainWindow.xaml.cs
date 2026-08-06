@@ -31,7 +31,52 @@ namespace minhnhat_tool
             dpDenNgay.SelectedDate = DateTime.Today;
             UpdateDnButton();
             // Kiểm tra cập nhật ngầm khi mở app (chỉ chạy khi đã cài qua Setup)
-            Loaded += async (_, __) => await Services.UpdateService.CheckAsync();
+            Loaded += async (_, __) =>
+            {
+                await Services.UpdateService.CheckAsync();
+                // Chạy BÙ cào nền nếu quá 1 ngày chưa chạy (đợi 1 phút cho app ổn định)
+                var st = Services.CaoNenSettings.HienTai;
+                if (st.Bat && !st.DaChayHomNay)
+                {
+                    await Task.Delay(TimeSpan.FromMinutes(1));
+                    if (st.Bat && !st.DaChayHomNay && _cts == null) await ChayCaoNenAsync();
+                }
+            };
+            // Bộ lập lịch: mỗi 5 phút kiểm tra tới giờ cào nền chưa
+            _timerCaoNen = new System.Windows.Threading.DispatcherTimer
+            { Interval = TimeSpan.FromMinutes(5) };
+            _timerCaoNen.Tick += CaoNen_Tick;
+            _timerCaoNen.Start();
+        }
+
+        // ===== Cào nền (làm ấm cache) — lập lịch trong app =====
+        private readonly System.Windows.Threading.DispatcherTimer _timerCaoNen;
+        private System.Threading.CancellationTokenSource? _caoNenCts;
+
+        private async void CaoNen_Tick(object? sender, EventArgs e)
+        {
+            var st = Services.CaoNenSettings.HienTai;
+            if (!st.Bat || Services.CaoNenService.DangChay) return;
+            if (_cts != null) return;   // đang có tác vụ thủ công (Đồng bộ/Xuất) -> nhường
+            if (DateTime.Now.Hour == st.GioChay && !st.DaChayHomNay)
+                await ChayCaoNenAsync();
+        }
+
+        private async Task ChayCaoNenAsync()
+        {
+            _caoNenCts = new System.Threading.CancellationTokenSource();
+            try { await Services.CaoNenService.RunAsync(null, _caoNenCts.Token); }
+            catch { }
+            finally { _caoNenCts?.Dispose(); _caoNenCts = null; }
+        }
+
+        // Người dùng bắt đầu thao tác thủ công -> dừng cào nền để không gọi TCT chồng nhau (tránh bị chặn)
+        private void NhuongCaoNen() => _caoNenCts?.Cancel();
+
+        private void mnuCaiDat_Click(object sender, RoutedEventArgs e)
+        {
+            NhuongCaoNen();
+            new CaiDatWindow { Owner = this }.ShowDialog();
         }
 
         // Toàn bộ hóa đơn đã tải (nguồn để lọc nội bộ, không mất khi tìm kiếm)
@@ -336,18 +381,32 @@ namespace minhnhat_tool
             { Filter = "Excel (*.xlsx)|*.xlsx", FileName = $"HoaDon_{Session.Mst}_{rows.Count}to_{DateTime.Now:yyyyMMdd_HHmm}.xlsx" };
             if (dlg.ShowDialog() != true) return;
 
+            NhuongCaoNen();   // dừng cào nền để không gọi TCT chồng nhau
             // Luôn tải chi tiết (nếu đã đăng nhập) để có Mã tra cứu + dòng hàng — bản đầy đủ
             bool canDetail = !string.IsNullOrEmpty(_token);
 
-            // 2 cột "liên quan" tốn THÊM 2 lượt gọi TCT cho MỖI hóa đơn mà hầu như luôn rỗng -> để người dùng chọn
-            bool layLienQuan = false;
+            // Chọn mức xuất. "Chỉ Tổng hợp" = KHÔNG gọi TCT lần nào -> gần như tức thì (dữ liệu đã cào sẵn).
+            bool chiTongHop = false, layLienQuan = false;
             if (canDetail)
-                layLienQuan = MessageBox.Show(
-                    "Có lấy thêm 2 cột 'Hóa đơn liên quan' và 'Thông tin liên quan' không?\n\n" +
-                    "• Chọn KHÔNG (khuyên dùng): nhanh hơn nhiều. Hai cột này hầu như luôn rỗng,\n" +
-                    "  chỉ có dữ liệu khi hóa đơn bị điều chỉnh / thay thế / sai sót.\n" +
-                    "• Chọn CÓ: đầy đủ nhưng phải gọi thêm 2 lượt cho mỗi hóa đơn.",
-                    "Xuất nhanh hay đầy đủ?", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+            {
+                var chon = MessageBox.Show(
+                    "Xuất NHANH — chỉ sheet Tổng hợp (không tải chi tiết)?\n\n" +
+                    "• CÓ = nhanh nhất, gần như tức thì. Chỉ danh sách tổng hợp; KHÔNG có sheet Chi tiết\n" +
+                    "  từng dòng hàng, không có Nhà cung cấp/Mã tra cứu.\n" +
+                    "• KHÔNG = xuất ĐẦY ĐỦ (có Chi tiết + Mã tra cứu). Lần đầu 1 kỳ hơi lâu, lần sau nhanh nhờ cache.\n" +
+                    "• HỦY = thôi không xuất.",
+                    "Xuất nhanh hay đầy đủ?", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+                if (chon == MessageBoxResult.Cancel) return;
+                chiTongHop = chon == MessageBoxResult.Yes;
+
+                // Chỉ khi xuất ĐẦY ĐỦ mới hỏi 2 cột "liên quan" (tốn thêm 2 lượt gọi/HĐ, hầu như luôn rỗng)
+                if (!chiTongHop)
+                    layLienQuan = MessageBox.Show(
+                        "Có lấy thêm 2 cột 'Hóa đơn liên quan' và 'Thông tin liên quan' không?\n\n" +
+                        "• KHÔNG (khuyên dùng): nhanh hơn. Hai cột này hầu như luôn rỗng.\n" +
+                        "• CÓ: đầy đủ nhưng gọi thêm 2 lượt cho mỗi hóa đơn.",
+                        "Lấy cột liên quan?", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+            }
 
             ShowProgress($"Đang xuất Excel {rows.Count} hóa đơn...");
             try
@@ -374,10 +433,15 @@ namespace minhnhat_tool
                 int headRowT = 3;
                 for (int c = 0; c < hT.Length; c++) wsT.Cell(headRowT, c + 1).Value = hT[c];
 
-                var wsC = wb.AddWorksheet("ChiTiet");
+                // Sheet ChiTiet chỉ tạo khi xuất ĐẦY ĐỦ
+                ClosedXML.Excel.IXLWorksheet? wsC = null;
                 string[] hC = { "Ký hiệu","Số HĐ","STT","Tên hàng hóa, dịch vụ","ĐVT","Số lượng","Đơn giá (chưa thuế)",
                                 "Tỷ lệ CK (%)","Tiền chiết khấu","Thành tiền chưa thuế","Thuế suất","Tiền thuế","Thành tiền sau thuế" };
-                for (int c = 0; c < hC.Length; c++) wsC.Cell(1, c + 1).Value = hC[c];
+                if (!chiTongHop)
+                {
+                    wsC = wb.AddWorksheet("ChiTiet");
+                    for (int c = 0; c < hC.Length; c++) wsC.Cell(1, c + 1).Value = hC[c];
+                }
 
                 // ===== GIAI DOAN 1: tai CHI TIET SONG SONG =====
                 // Truoc day chay TUAN TU tung to (moi to vai luot goi + delay) nen rat cham.
@@ -386,9 +450,9 @@ namespace minhnhat_tool
                 var ttlqs = new string[rows.Count];
                 for (int k = 0; k < rows.Count; k++) { djs[k] = ""; lqs[k] = ""; ttlqs[k] = ""; }
 
-                if (canDetail)
+                if (canDetail && !chiTongHop)
                 {
-                    // Dùng CHUNG bộ tải chi tiết ưu tiên độ chính xác (2 luồng + quét lại tuần tự)
+                    // Dùng CHUNG bộ tải chi tiết ưu tiên độ chính xác (tuần tự, nhiều lượt)
                     djs = await LayChiTietDayDuAsync(rows);
 
                     // 2 cột "liên quan" (tùy chọn) — chạy riêng, cũng đi nhẹ để khỏi bị chặn
@@ -428,7 +492,7 @@ namespace minhnhat_tool
                 // Nut that cu: tra TRUOT khong duoc nho, nen moi hoa don lai goi lai tracuunnt
                 // (max_tries=12&delay=1.5 -> toi ~18 giay/lan) => 37 hoa don mat ~15 phut.
                 var canTra = new HashSet<string>();
-                foreach (var d in djs)
+                foreach (var d in chiTongHop ? Array.Empty<string>() : djs)
                 {
                     if (string.IsNullOrEmpty(d)) continue;
                     try
@@ -486,6 +550,7 @@ namespace minhnhat_tool
                     string dj = djs[i - 1], hdLienQuanCol = lqs[i - 1], ttLienQuanCol = ttlqs[i - 1];
 
                     int soDong = 0;   // dem so dong hang da ghi cho HD nay (0 -> ghi dong du phong)
+                    if (!chiTongHop)
                     try
                     {
                         if (!string.IsNullOrEmpty(dj))
@@ -506,7 +571,7 @@ namespace minhnhat_tool
                                     double tthue  = ExD(it, "tthue");          // tien thue/dong (hay null)
                                     if (tthue <= 0) tthue = Math.Round(thtien * tsuat, 0);  // null -> tu tinh
                                     thtien *= sign; tthue *= sign;             // dong chiet khau -> gia tri am
-                                    wsC.Cell(rC, 1).Value  = hd.Khhdon;
+                                    wsC!.Cell(rC, 1).Value  = hd.Khhdon;
                                     wsC.Cell(rC, 2).Value  = hd.Shdon;
                                     wsC.Cell(rC, 3).Value  = ExS(it, "stt");
                                     wsC.Cell(rC, 4).Value  = ExS(it, "ten");
@@ -527,9 +592,9 @@ namespace minhnhat_tool
 
                     // Khong lay duoc dong hang (TCT chan chi tiet) -> ghi 1 dong o muc hoa don
                     // de tong cot ChiTiet KHONG bi thieu so voi sheet TongHop.
-                    if (soDong == 0)
+                    if (!chiTongHop && soDong == 0)
                     {
-                        wsC.Cell(rC, 1).Value  = hd.Khhdon;
+                        wsC!.Cell(rC, 1).Value  = hd.Khhdon;
                         wsC.Cell(rC, 2).Value  = hd.Shdon;
                         wsC.Cell(rC, 4).Value  = "(chưa lấy được chi tiết)";
                         wsC.Cell(rC, 10).Value = (double)hd.Tgtcthue;
@@ -568,7 +633,7 @@ namespace minhnhat_tool
                 }
 
                 StyleSheet(wsT, headRowT, hT.Length);
-                StyleSheet(wsC, 1, hC.Length);
+                if (wsC != null) StyleSheet(wsC, 1, hC.Length);
                 wb.SaveAs(dlg.FileName);
                 MessageBox.Show($"Đã xuất Excel {rows.Count} hóa đơn:\n{dlg.FileName}");
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(dlg.FileName) { UseShellExecute = true });
@@ -875,6 +940,7 @@ namespace minhnhat_tool
                                 "Thời gian không hợp lệ", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
+            NhuongCaoNen();   // dừng cào nền để không gọi TCT chồng nhau
             btnDongBo.IsEnabled = false;
             btnDongBo.Content = "⏳ Đang tải...";
             string chieu = _loaiHD == "purchase" ? "đầu vào (mua vào)" : "đầu ra (bán ra)";

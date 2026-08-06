@@ -18,6 +18,9 @@ app_releases/
 .idea/
 *.DotSettings.user
 
+# ===== VS Code workspace (chứa đường dẫn cá nhân) =====
+*.code-workspace
+
 # ===== OS =====
 Thumbs.db
 Desktop.ini

@@ -315,6 +315,8 @@
                             <MenuItem Header="Khai thuế GTGT (theo hóa đơn) — nhanh, chuẩn TCT" Click="mnuBangKeKhaiThue_Click"/>
                             <MenuItem Header="Chi tiết theo dòng hàng (mẫu MISA)" Click="mnuBangKe_Click"/>
                         </MenuItem>
+                        <Separator/>
+                        <MenuItem Header="⚙  Cài đặt — Cào nền &amp; Cache" Click="mnuCaiDat_Click"/>
                     </ContextMenu>
                 </DataGrid.ContextMenu>
                 <DataGrid.ColumnHeaderStyle>
