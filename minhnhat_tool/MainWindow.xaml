@@ -155,18 +155,46 @@
                 </StackPanel>
 
                 <StackPanel Margin="0,0,12,0" VerticalAlignment="Bottom">
-                    <TextBlock Text="TÌM (MST / SỐ HĐ / TÊN)" Style="{StaticResource Lbl}"/>
-                    <TextBox x:Name="txtTimKiem" Width="240" Height="40"
-                             Background="#0f172a" Foreground="White" BorderBrush="#334155"
-                             Padding="10,0" VerticalContentAlignment="Center"
-                             TextChanged="txtTimKiem_TextChanged"/>
+                    <TextBlock Text="TÌM TRONG DANH SÁCH ĐANG XEM" Style="{StaticResource Lbl}"/>
+                    <Grid Width="300">
+                        <TextBox x:Name="txtTimKiem" Height="40" Padding="36,0,34,0"
+                                 TextChanged="txtTimKiem_TextChanged"/>
+                        <Path Style="{StaticResource IconNet}" Data="{StaticResource IcTim}" Width="15" Height="15"
+                              HorizontalAlignment="Left" Margin="12,0,0,0" IsHitTestVisible="False"/>
+                        <TextBlock Text="MST, số hóa đơn hoặc tên" Foreground="#3E4B66" FontSize="12"
+                                   Margin="36,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Text, ElementName=txtTimKiem}" Value="">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <Button x:Name="btnXoaTim" Width="28" Height="28" HorizontalAlignment="Right"
+                                Margin="0,0,5,0" Background="Transparent" Padding="0"
+                                ui:Ic.Glyph="{StaticResource IcXoaO}" ui:Ic.Size="15"
+                                ToolTip="Xóa từ khóa" Click="btnXoaTim_Click">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource Nut}">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Text, ElementName=txtTimKiem}" Value="">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </Grid>
                 </StackPanel>
 
                 <StackPanel VerticalAlignment="Bottom" Orientation="Horizontal">
-                    <Button x:Name="btnTimNoiBo" Content="Tìm nội bộ" ui:Ic.Glyph="{StaticResource IcTim}"
-                            Width="150" Click="btnTimNoiBo_Click"/>
                     <Button x:Name="btnDongBo" Content="Đồng bộ Tổng cục Thuế" ui:Ic.Glyph="{StaticResource IcDongBo}" Style="{StaticResource BtnGreen}"
-                            Width="220" Margin="10,0,0,0" Click="btnDongBo_Click"/>
+                            Width="220" Click="btnDongBo_Click"/>
                     <Button x:Name="btnThongKe" Content="Thống kê" ui:Ic.Glyph="{StaticResource IcThongKe}"
                             Background="#7c3aed" Width="130" Margin="10,0,0,0" Click="btnThongKe_Click"/>
                     <!-- Bật lại: nay dùng API tra cứu HÀNG LOẠT (1 request cho cả danh sách,
@@ -189,6 +217,7 @@
 
         <!-- ===== BẢNG HÓA ĐƠN (giữa, chiếm hết) ===== -->
         <Border Style="{StaticResource Card}" Padding="0">
+          <Grid>
             <DataGrid x:Name="grdHoaDon" AutoGenerateColumns="False" IsReadOnly="True"
                       SelectionMode="Extended" SelectionUnit="FullRow"
                       Background="Transparent" Foreground="#e2e8f0" BorderThickness="0"
@@ -265,6 +294,19 @@
                     <DataGridTextColumn Header="Tình trạng NCC" Binding="{Binding TinhTrangNcc}" Width="180"/>
                 </DataGrid.Columns>
             </DataGrid>
+
+            <!-- Bảng trống mà không nói gì thì người dùng không biết đang thiếu bước nào -->
+            <StackPanel x:Name="pnlTrongHD" VerticalAlignment="Center" HorizontalAlignment="Center"
+                        IsHitTestVisible="False">
+                <Path x:Name="icoTrongHD" Style="{StaticResource IconNet}" Data="{StaticResource IcTimHoaDon}"
+                      Stroke="#334155" Width="46" Height="46" HorizontalAlignment="Center"/>
+                <TextBlock x:Name="lblTrongHD" Text="Chưa có hóa đơn nào" Foreground="#64748B" FontSize="14"
+                           HorizontalAlignment="Center" Margin="0,14,0,0"/>
+                <TextBlock x:Name="lblTrongHDPhu" Text="Chọn doanh nghiệp rồi bấm “Đồng bộ Tổng cục Thuế”"
+                           Foreground="#475569" FontSize="12" HorizontalAlignment="Center" Margin="0,5,0,0"
+                           TextWrapping="Wrap" TextAlignment="Center" MaxWidth="320"/>
+            </StackPanel>
+          </Grid>
         </Border>
     </DockPanel>
 

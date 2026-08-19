@@ -288,4 +288,46 @@
             <PathGeometry Figures="m6 9 6 6 6-6"/>
         </GeometryGroup>
 
+        <!-- eye-off -->
+        <GeometryGroup x:Key="IcAnMat">
+            <PathGeometry Figures="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/>
+            <PathGeometry Figures="M14.084 14.158a3 3 0 0 1-4.242-4.242"/>
+            <PathGeometry Figures="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/>
+            <PathGeometry Figures="m2 2 20 20"/>
+        </GeometryGroup>
+
+        <!-- user-round -->
+        <GeometryGroup x:Key="IcNguoi">
+            <EllipseGeometry Center="12,8" RadiusX="5" RadiusY="5"/>
+            <PathGeometry Figures="M20 21a8 8 0 0 0-16 0"/>
+        </GeometryGroup>
+
+        <!-- banknote -->
+        <GeometryGroup x:Key="IcTien">
+            <RectangleGeometry Rect="2,6,20,12" RadiusX="2" RadiusY="2"/>
+            <EllipseGeometry Center="12,12" RadiusX="2" RadiusY="2"/>
+            <PathGeometry Figures="M6 12h.01M18 12h.01"/>
+        </GeometryGroup>
+
+        <!-- file-search -->
+        <GeometryGroup x:Key="IcTimHoaDon">
+            <PathGeometry Figures="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/>
+            <PathGeometry Figures="M14 2v5a1 1 0 0 0 1 1h5"/>
+            <EllipseGeometry Center="11.5,14.5" RadiusX="2.5" RadiusY="2.5"/>
+            <PathGeometry Figures="M13.3 16.3 15 18"/>
+        </GeometryGroup>
+
+        <!-- inbox -->
+        <GeometryGroup x:Key="IcTrong">
+            <PathGeometry Figures="M22,12 L16,12 L14,15 L10,15 L8,12 L2,12"/>
+            <PathGeometry Figures="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
+        </GeometryGroup>
+
+        <!-- circle-x -->
+        <GeometryGroup x:Key="IcXoaO">
+            <EllipseGeometry Center="12,12" RadiusX="10" RadiusY="10"/>
+            <PathGeometry Figures="m15 9-6 6"/>
+            <PathGeometry Figures="m9 9 6 6"/>
+        </GeometryGroup>
+
 </ResourceDictionary>

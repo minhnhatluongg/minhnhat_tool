@@ -30,6 +30,7 @@ namespace minhnhat_tool
             dpTuNgay.SelectedDate = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
             dpDenNgay.SelectedDate = DateTime.Today;
             UpdateDnButton();
+            CapNhatBangTrong(false);   // nói ngay đang thiếu bước nào, đừng để bảng trống trơn
             // Kiểm tra cập nhật ngầm khi mở app (chỉ chạy khi đã cài qua Setup)
             Loaded += async (_, __) =>
             {
@@ -211,6 +212,31 @@ namespace minhnhat_tool
             lblThue.Text = $"Thuế: {sThue:N0} VNĐ";
             lblTong.Text = $"Tổng thanh toán: {sTong:N0} VNĐ";
             lblSoLuong.Text = $"Số lượng: {_hoaDon.Count}/{_hoaDonAll.Count}  (máy tính tiền: {soPos})";
+            CapNhatBangTrong(kw.Length > 0 || tt.Length > 0 || loaiIdx > 0);
+        }
+
+        /// <summary>Bảng trống thì phải nói vì sao: chưa tải gì, hay có tải nhưng bộ lọc cắt hết.
+        /// Hai tình huống này cần hai hành động khác nhau.</summary>
+        private void CapNhatBangTrong(bool dangLoc)
+        {
+            if (pnlTrongHD == null) return;
+            if (_hoaDon.Count > 0) { pnlTrongHD.Visibility = Visibility.Collapsed; return; }
+
+            pnlTrongHD.Visibility = Visibility.Visible;
+            if (_hoaDonAll.Count > 0 && dangLoc)
+            {
+                icoTrongHD.Data = (System.Windows.Media.Geometry)FindResource("IcTim");
+                lblTrongHD.Text = "Không có hóa đơn nào khớp";
+                lblTrongHDPhu.Text = $"Đã lọc hết {_hoaDonAll.Count} hóa đơn đang xem — thử xóa từ khóa hoặc đổi bộ lọc.";
+            }
+            else
+            {
+                icoTrongHD.Data = (System.Windows.Media.Geometry)FindResource("IcTimHoaDon");
+                lblTrongHD.Text = "Chưa có hóa đơn nào";
+                lblTrongHDPhu.Text = string.IsNullOrEmpty(Session.Mst)
+                    ? "Bấm nút doanh nghiệp ở góc trên để chọn công ty trước."
+                    : "Chọn khoảng ngày rồi bấm “Đồng bộ Tổng cục Thuế”.";
+            }
         }
 
         private static bool RowMatches(InvoiceRow r, string kw)
@@ -370,8 +396,13 @@ namespace minhnhat_tool
         private Services.KetQuaTraNnt? _lanTraCuoi;
 
         // Tìm nội bộ: lọc trên dữ liệu ĐÃ tải (không gọi lại TCT). Gõ tới đâu lọc tới đó.
-        private void btnTimNoiBo_Click(object sender, RoutedEventArgs e) => ApplyFilter();
         private void txtTimKiem_TextChanged(object sender, TextChangedEventArgs e) => ApplyFilter();
+
+        private void btnXoaTim_Click(object sender, RoutedEventArgs e)
+        {
+            txtTimKiem.Clear();
+            txtTimKiem.Focus();
+        }
         private void cboTrangThai_SelectionChanged(object sender, SelectionChangedEventArgs e) => ApplyFilter();
         private void cboLoaiCT_SelectionChanged(object sender, SelectionChangedEventArgs e) => ApplyFilter();
 

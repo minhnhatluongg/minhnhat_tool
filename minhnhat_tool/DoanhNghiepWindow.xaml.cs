@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -49,6 +49,8 @@ namespace minhnhat_tool
         {
             lstDN.ItemsSource = null;
             lstDN.ItemsSource = _list;
+            lblDem.Text = _list.Count.ToString();
+            pnlTrong.Visibility = _list.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         }
 
         // Click 1 DN trong danh sách -> đổ lên form để sửa
@@ -58,14 +60,16 @@ namespace minhnhat_tool
             {
                 txtMst.Text = dn.Mst;
                 txtTen.Text = dn.TenDN;
-                txtPassword.Password = dn.Password;
+                DatMatKhau(dn.Password);
+                lblTieuDeForm.Text = "Sửa doanh nghiệp";
             }
         }
 
         private void btnLuu_Click(object sender, RoutedEventArgs e)
         {
             string mst = txtMst.Text.Trim();
-            if (string.IsNullOrEmpty(mst) || string.IsNullOrEmpty(txtPassword.Password))
+            string mk = MatKhau();
+            if (string.IsNullOrEmpty(mst) || string.IsNullOrEmpty(mk))
             {
                 MessageBox.Show("Nhập đủ Mã số thuế và mật khẩu!");
                 return;
@@ -80,11 +84,11 @@ namespace minhnhat_tool
             if (existing != null)
             {
                 existing.TenDN = ten;
-                existing.Password = txtPassword.Password;
+                existing.Password = mk;
             }
             else
             {
-                _list.Add(new DoanhNghiep { Mst = mst, TenDN = ten, Password = txtPassword.Password });
+                _list.Add(new DoanhNghiep { Mst = mst, TenDN = ten, Password = mk });
             }
 
             DoanhNghiepStore.Save(_list);
@@ -107,6 +111,31 @@ namespace minhnhat_tool
             }
         }
 
+        // ===== Mật khẩu: che mặc định, bấm con mắt để soi lại chuỗi vừa gõ =====
+        // Hai control chồng nhau, chỉ một cái hiện; đây là cách duy nhất trong WPF vì
+        // PasswordBox cố tình không cho đọc/ghi text khi đang che.
+        private bool _hienMk;
+
+        private string MatKhau() => _hienMk ? txtPasswordHien.Text : txtPassword.Password;
+
+        private void DatMatKhau(string mk)
+        {
+            txtPassword.Password = mk ?? "";
+            txtPasswordHien.Text = mk ?? "";
+        }
+
+        private void btnHienMk_Click(object sender, RoutedEventArgs e)
+        {
+            _hienMk = !_hienMk;
+            if (_hienMk) txtPasswordHien.Text = txtPassword.Password;
+            else txtPassword.Password = txtPasswordHien.Text;
+
+            txtPasswordHien.Visibility = _hienMk ? Visibility.Visible : Visibility.Collapsed;
+            txtPassword.Visibility = _hienMk ? Visibility.Collapsed : Visibility.Visible;
+            Ui.Ic.SetGlyph(btnHienMk, (System.Windows.Media.Geometry)FindResource(_hienMk ? "IcAnMat" : "IcXem"));
+            (_hienMk ? (Control)txtPasswordHien : txtPassword).Focus();
+        }
+
         private void btnLamMoi_Click(object sender, RoutedEventArgs e) => ClearForm();
 
         private void ClearForm()
@@ -114,7 +143,9 @@ namespace minhnhat_tool
             lstDN.SelectedItem = null;
             txtMst.Text = "";
             txtTen.Text = "";
-            txtPassword.Password = "";
+            DatMatKhau("");
+            lblTieuDeForm.Text = "Thêm doanh nghiệp";
+            txtMst.Focus();
         }
 
         // Chọn DN này -> lưu vào phiên, đóng cửa sổ
