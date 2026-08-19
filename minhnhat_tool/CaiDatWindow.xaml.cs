@@ -16,6 +16,9 @@ namespace minhnhat_tool
         private static readonly System.Windows.Media.Brush Xam =
             new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x1e, 0x29, 0x3b));
 
+        /// <summary>Mở thẳng tab Khóa &amp; Hạn mức — dùng khi người dùng bấm dải nhắc ở màn hình chính.</summary>
+        public static bool MoTabKhoa { get; set; }
+
         private CancellationTokenSource? _cts;
         private bool _dangNap = true;   // chặn các sự kiện Changed bắn lúc đang đổ dữ liệu vào form
 
@@ -48,6 +51,7 @@ namespace minhnhat_tool
             CapNhatKhoa();
             NapThongKe();
             _ = NapHanMucAsync();
+            if (MoTabKhoa) tabs.SelectedIndex = 3;
         }
 
         // ===================== TAB CÀO NỀN =====================
@@ -274,13 +278,18 @@ namespace minhnhat_tool
 
         // ===================== TAB KIỂM TRA NCC =====================
 
-        /// <summary>Thử gọi dịch vụ tra cứu bằng khóa vừa nhập — xác nhận khóa dùng được
+        /// <summary>Thử gọi dịch vụ tra cứu bằng khóa đã lưu — xác nhận khóa dùng được
         /// trước khi tin vào kết quả kiểm tra nhà cung cấp.</summary>
         private async void btnThuTraCuu_Click(object sender, RoutedEventArgs e)
         {
-            LuuTraCuu();
+            LuuKhoa();
             var tx = TaxInfoSettings.HienTai;
-            if (!tx.DaCauHinh) { lblTraCuu.Text = "Chưa nhập API Key / Secret."; return; }
+            if (!tx.DaCauHinh)
+            {
+                lblTraCuu.Text = "Chưa có khóa API — sang tab Khóa & Hạn mức để nhập.";
+                tabs.SelectedIndex = 3;
+                return;
+            }
 
             btnThuTraCuu.IsEnabled = false;
             lblTraCuu.Text = "Đang thử...";
@@ -301,8 +310,14 @@ namespace minhnhat_tool
             finally { btnThuTraCuu.IsEnabled = true; }
         }
 
-        private void LuuTraCuu()
+        private void btnSangTabKhoa_Click(object sender, RoutedEventArgs e) => tabs.SelectedIndex = 3;
+
+        // ===================== TAB KHÓA & HẠN MỨC =====================
+
+        /// <summary>Lưu toàn bộ cấu hình dịch vụ (khóa + tùy chọn tự kiểm tra NCC).</summary>
+        private void LuuKhoa()
         {
+            if (_dangNap) return;
             var tx = TaxInfoSettings.HienTai;
             tx.ApiKey = txtApiKey.Text.Trim();
             tx.ApiSecret = txtApiSecret.Text.Trim();
@@ -310,17 +325,69 @@ namespace minhnhat_tool
             tx.Luu();
         }
 
-        // ===================== TAB HẠN MỨC =====================
+        private void Khoa_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_dangNap) return;
+            lblKhoaKq.Text = "";
+        }
 
+        private async void btnLuuKhoa_Click(object sender, RoutedEventArgs e)
+        {
+            string k = txtApiKey.Text.Trim(), s = txtApiSecret.Text.Trim();
+            if (k.Length == 0 || s.Length == 0)
+            {
+                lblKhoaKq.Foreground = System.Windows.Media.Brushes.Khaki;
+                lblKhoaKq.Text = "Cần nhập đủ cả API Key và API Secret.";
+                return;
+            }
+            // Nhắc nhẹ chứ không chặn: định dạng khóa có thể đổi ở bản sau, chặn cứng sẽ khóa nhầm khách.
+            if (!k.StartsWith("tk_", StringComparison.Ordinal))
+            {
+                lblKhoaKq.Foreground = System.Windows.Media.Brushes.Khaki;
+                lblKhoaKq.Text = "Lưu ý: API Key thường bắt đầu bằng \"tk_\" — kiểm tra lại xem có dán nhầm ô không.";
+            }
+
+            LuuKhoa();
+            CapNhatKhoa();
+            CapNhatPhamVi();          // cảnh báo "chưa có khóa" ở tab Cào nền phải mất đi ngay
+            await NapHanMucAsync(baoKetQua: true);
+        }
+
+        private void btnXoaKhoa_Click(object sender, RoutedEventArgs e)
+        {
+            if (MessageBox.Show("Xóa khóa API khỏi máy này?" + Environment.NewLine +
+                                "Cào nền và kiểm tra nhà cung cấp sẽ ngừng hoạt động. Số tờ đã mua không mất — nhập lại khóa là dùng tiếp.",
+                    "Xóa khóa", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+
+            txtApiKey.Text = "";
+            txtApiSecret.Text = "";
+            LuuKhoa();
+            CapNhatKhoa();
+            CapNhatPhamVi();
+            _ = NapHanMucAsync();
+            lblKhoaKq.Foreground = System.Windows.Media.Brushes.Khaki;
+            lblKhoaKq.Text = "Đã xóa khóa khỏi máy này.";
+        }
+
+        /// <summary>Hiện tình trạng khóa + đầu mối mua, và nhắc ở tab NCC khi chưa có khóa.</summary>
         private void CapNhatKhoa()
         {
             var tx = TaxInfoSettings.HienTai;
             int daTra = HoaDonCache.DemDaTra();
+
             lblKhoaTomTat.Text = !tx.DaCauHinh
-                ? "Chưa nhập khóa API."
-                : $"Đang dùng khóa {ChePhanCuoi(tx.ApiKey)} tại {tx.BaseUrl}.\n" +
-                  $"Máy này đã ghi nhận {daTra:N0} tờ đã trả tiền — những tờ đó tải lại không mất thêm, " +
-                  "kể cả khi mất mạng.";
+                ? "Chưa có khóa. Cào nền và kiểm tra nhà cung cấp đang tắt."
+                : $"Đang dùng khóa {ChePhanCuoi(tx.ApiKey)} tại {tx.BaseUrl}. " +
+                  $"Máy này đã ghi nhận {daTra:N0} tờ đã trả tiền — những tờ đó tải lại không mất thêm, kể cả khi mất mạng.";
+
+            brdCanKhoaNcc.Visibility = tx.DaCauHinh ? Visibility.Collapsed : Visibility.Visible;
+
+            if (ThongTinLienHe.CoThongTin)
+            {
+                lblLienHe.Text = ThongTinLienHe.MotDong();
+                lblLienHe.Visibility = Visibility.Visible;
+            }
+            else lblLienHe.Visibility = Visibility.Collapsed;
         }
 
         private static string ChePhanCuoi(string s)
@@ -329,13 +396,14 @@ namespace minhnhat_tool
         private async void btnLamMoiHanMuc_Click(object sender, RoutedEventArgs e) => await NapHanMucAsync();
 
         /// <summary>Hỏi máy chủ số tờ còn lại. Không tốn hạn mức.</summary>
-        private async Task NapHanMucAsync()
+        private async Task NapHanMucAsync(bool baoKetQua = false)
         {
             var tx = TaxInfoSettings.HienTai;
             if (!tx.DaCauHinh)
             {
-                lblHanMuc.Text = "Chưa nhập khóa";
-                lblHanMucPhu.Text = "Nhập API Key / Secret ở tab \"Kiểm tra NCC\" để dùng được cào nền.";
+                lblHanMuc.Text = "Chưa có khóa";
+                lblHanMuc.Foreground = System.Windows.Media.Brushes.Khaki;
+                lblHanMucPhu.Text = "Làm theo 3 bước bên dưới để bắt đầu dùng cào nền.";
                 lblHanMucChiTiet.Text = "";
                 lblHanMucLoi.Text = "";
                 pbHanMuc.Value = 0;
@@ -350,15 +418,24 @@ namespace minhnhat_tool
                 if (!hm.ThanhCong)
                 {
                     lblHanMuc.Text = "Không xem được";
+                    lblHanMuc.Foreground = System.Windows.Media.Brushes.Khaki;
                     lblHanMucPhu.Text = "";
                     lblHanMucChiTiet.Text = "";
                     lblHanMucLoi.Text = hm.ThongBao;
                     pbHanMuc.Value = 0;
+                    if (baoKetQua)
+                    {
+                        lblKhoaKq.Foreground = System.Windows.Media.Brushes.Salmon;
+                        lblKhoaKq.Text = hm.ThongBao;
+                    }
                     return;
                 }
 
                 lblHanMucLoi.Text = "";
                 lblHanMuc.Text = $"{hm.ConLai:N0} tờ";
+                lblHanMuc.Foreground = hm.ConLai <= 0
+                    ? System.Windows.Media.Brushes.IndianRed
+                    : System.Windows.Media.Brushes.MediumSeaGreen;
                 lblHanMucPhu.Text = $"{hm.CongTy} — MST {hm.Mst}" +
                                     (hm.DangHoatDong ? "" : "   ⚠ khóa đang bị tạm khóa");
                 lblHanMucChiTiet.Text = $"Đã dùng {hm.DaDung:N0} / {hm.TongSoTo:N0} tờ.";
@@ -368,6 +445,12 @@ namespace minhnhat_tool
                     : (hm.TongSoTo > 0 && hm.DaDung * 1.0 / hm.TongSoTo > 0.8
                         ? System.Windows.Media.Brushes.Orange
                         : System.Windows.Media.Brushes.MediumSeaGreen);
+
+                if (baoKetQua)
+                {
+                    lblKhoaKq.Foreground = System.Windows.Media.Brushes.LightGreen;
+                    lblKhoaKq.Text = $"Khóa dùng được — còn {hm.ConLai:N0} tờ.";
+                }
             }
             catch (Exception ex) { lblHanMucLoi.Text = "Lỗi: " + ex.Message; }
             finally { btnLamMoiHanMuc.IsEnabled = true; }
@@ -377,7 +460,7 @@ namespace minhnhat_tool
         {
             _cts?.Cancel();
             LuuCaiDat();
-            LuuTraCuu();
+            LuuKhoa();
             base.OnClosed(e);
         }
     }

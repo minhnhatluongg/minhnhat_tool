@@ -420,86 +420,168 @@
                             <TextBlock Foreground="#94a3b8" TextWrapping="Wrap" Margin="0,0,0,14"
                                        Text="Tra tình trạng mã số thuế của đối tác để phát hiện nhà cung cấp đã ngừng hoạt động hoặc không hoạt động tại địa chỉ đăng ký — dấu hiệu cần rà lại trước khi kê khai khấu trừ. Mỗi mã số thuế chỉ tra 1 lần dù xuất hiện ở nhiều hóa đơn."/>
 
-                            <TextBlock Text="API Key" Style="{StaticResource Nhan}" Margin="0,0,0,4"/>
-                            <TextBox x:Name="txtApiKey" Style="{StaticResource O}" Height="34"/>
-                            <TextBlock Text="API Secret" Style="{StaticResource Nhan}" Margin="0,10,0,4"/>
-                            <TextBox x:Name="txtApiSecret" Style="{StaticResource O}" Height="34"/>
-
                             <CheckBox x:Name="chkTuKiemTra" Content="  Tự kiểm tra ngay sau khi đồng bộ hóa đơn"
-                                      Foreground="#e2e8f0" FontSize="13" Margin="0,14,0,0"/>
+                                      Foreground="#e2e8f0" FontSize="14"/>
 
-                            <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                            <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
                                 <Button x:Name="btnThuTraCuu" Content="Thử tra cứu" Style="{StaticResource Btn}"
                                         Background="#2563eb" Height="36" Width="140" Click="btnThuTraCuu_Click"/>
                                 <TextBlock x:Name="lblTraCuu" Foreground="#facc15" VerticalAlignment="Center"
                                            Margin="14,0,0,0" TextWrapping="Wrap" Width="560"/>
                             </StackPanel>
+                        </StackPanel>
+                    </Border>
 
-                            <TextBlock Foreground="#64748b" TextWrapping="Wrap" Margin="0,12,0,0" FontSize="12"
-                                       Text="Khóa được lưu trên máy này, trong thư mục dữ liệu ứng dụng — không nằm trong mã nguồn."/>
+                    <Border x:Name="brdCanKhoaNcc" Background="#1c1917" BorderBrush="#b45309" BorderThickness="1"
+                            CornerRadius="12" Padding="18" Margin="0,14,0,0" Visibility="Collapsed">
+                        <StackPanel>
+                            <TextBlock Text="🔑  Tính năng này cần khóa API" Foreground="#fbbf24"
+                                       FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
+                            <TextBlock Foreground="#94a3b8" TextWrapping="Wrap" Margin="0,0,0,12"
+                                       Text="Kiểm tra nhà cung cấp dùng chung khóa với cào nền. Nhập một lần là dùng được cả hai."/>
+                            <Button Content="Sang tab Khóa &amp; Hạn mức" Style="{StaticResource Btn}"
+                                    Background="#b45309" Height="36" Width="220" HorizontalAlignment="Left"
+                                    Click="btnSangTabKhoa_Click"/>
                         </StackPanel>
                     </Border>
                 </StackPanel>
             </ScrollViewer>
         </TabItem>
 
-        <!-- ============ TAB 4: HẠN MỨC ============ -->
-        <TabItem Header="💳  Hạn mức">
+        <!-- ============ TAB 4: KHÓA & HẠN MỨC ============ -->
+        <TabItem Header="🔑  Khóa &amp; Hạn mức">
             <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,10,0,0">
                 <StackPanel Margin="8">
 
+                    <!-- Trạng thái hạn mức -->
+                    <Border x:Name="brdHanMuc" Background="#111827" CornerRadius="12" Padding="18" Margin="0,0,0,14">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Số tờ hóa đơn còn lại" Foreground="#94a3b8" FontSize="13"/>
+                                <TextBlock x:Name="lblHanMuc" Foreground="#22c55e" FontSize="30" FontWeight="Bold"
+                                           TextWrapping="Wrap" Text="—" Margin="0,2,0,0"/>
+                                <TextBlock x:Name="lblHanMucPhu" Foreground="#94a3b8" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                <ProgressBar x:Name="pbHanMuc" Height="8" Minimum="0" Maximum="100" Value="0"
+                                             Background="#1e293b" Foreground="#22c55e" BorderThickness="0"
+                                             Margin="0,12,0,0"/>
+                                <TextBlock x:Name="lblHanMucChiTiet" Foreground="#64748b" FontSize="12"
+                                           Margin="0,6,0,0" TextWrapping="Wrap"/>
+                                <TextBlock x:Name="lblHanMucLoi" Foreground="#facc15" Margin="0,8,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" x:Name="btnLamMoiHanMuc" Content="⟳  Làm mới"
+                                    Style="{StaticResource Btn}" Background="#334155" Height="34" Width="120"
+                                    VerticalAlignment="Top" Click="btnLamMoiHanMuc_Click"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- Hướng dẫn 3 bước -->
                     <Border Background="#111827" CornerRadius="12" Padding="18" Margin="0,0,0,14">
                         <StackPanel>
-                            <TextBlock Style="{StaticResource TieuDe}" Text="💳  Số tờ hóa đơn còn lại"/>
-                            <TextBlock x:Name="lblHanMuc" Foreground="#22c55e" FontSize="22" FontWeight="Bold"
-                                       TextWrapping="Wrap" Text="—"/>
-                            <TextBlock x:Name="lblHanMucPhu" Foreground="#94a3b8" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                            <TextBlock Style="{StaticResource TieuDe}" Text="Lấy khóa như thế nào"/>
 
-                            <Border Background="#0b1220" CornerRadius="8" Padding="12" Margin="0,14,0,0">
-                                <StackPanel>
-                                    <ProgressBar x:Name="pbHanMuc" Height="10" Minimum="0" Maximum="100" Value="0"
-                                                 Background="#1e293b" Foreground="#22c55e" BorderThickness="0"/>
-                                    <TextBlock x:Name="lblHanMucChiTiet" Foreground="#64748b" FontSize="12"
-                                               Margin="0,8,0,0" TextWrapping="Wrap"/>
+                            <Grid Margin="0,0,0,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Width="26" Height="26" CornerRadius="13" Background="#2563eb" VerticalAlignment="Top">
+                                    <TextBlock Text="1" Foreground="White" FontWeight="Bold"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Grid.Column="1" Margin="12,0,0,0">
+                                    <TextBlock Text="Liên hệ mua số tờ hóa đơn" Foreground="#e2e8f0" FontWeight="SemiBold"/>
+                                    <TextBlock Foreground="#94a3b8" TextWrapping="Wrap" Margin="0,2,0,0"
+                                               Text="Mua theo số tờ, dùng dần, không hết hạn. Bên bán cấp cho bạn một cặp API Key và API Secret."/>
+                                    <TextBlock x:Name="lblLienHe" Foreground="#22d3ee" TextWrapping="Wrap"
+                                               Margin="0,6,0,0" Visibility="Collapsed"/>
                                 </StackPanel>
-                            </Border>
+                            </Grid>
 
-                            <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
-                                <Button x:Name="btnLamMoiHanMuc" Content="⟳  Làm mới" Style="{StaticResource Btn}"
-                                        Background="#2563eb" Height="36" Width="140" Click="btnLamMoiHanMuc_Click"/>
-                                <TextBlock x:Name="lblHanMucLoi" Foreground="#facc15" VerticalAlignment="Center"
-                                           Margin="14,0,0,0" TextWrapping="Wrap" Width="560"/>
-                            </StackPanel>
+                            <Grid Margin="0,0,0,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Width="26" Height="26" CornerRadius="13" Background="#2563eb" VerticalAlignment="Top">
+                                    <TextBlock Text="2" Foreground="White" FontWeight="Bold"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Grid.Column="1" Margin="12,0,0,0">
+                                    <TextBlock Text="Dán hai dòng nhận được vào ô bên dưới" Foreground="#e2e8f0" FontWeight="SemiBold"/>
+                                    <TextBlock Foreground="#94a3b8" TextWrapping="Wrap" Margin="0,2,0,0"
+                                               Text="API Key bắt đầu bằng tk_. API Secret là dãy chữ số dài hơn. Dán đủ cả hai, không thừa dấu cách."/>
+                                </StackPanel>
+                            </Grid>
+
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Width="26" Height="26" CornerRadius="13" Background="#2563eb" VerticalAlignment="Top">
+                                    <TextBlock Text="3" Foreground="White" FontWeight="Bold"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Grid.Column="1" Margin="12,0,0,0">
+                                    <TextBlock Text="Bấm Lưu &amp; kiểm tra" Foreground="#e2e8f0" FontWeight="SemiBold"/>
+                                    <TextBlock Foreground="#94a3b8" TextWrapping="Wrap" Margin="0,2,0,0"
+                                               Text="App hỏi máy chủ ngay để xác nhận khóa dùng được và hiện số tờ còn lại. Không tốn tờ nào."/>
+                                </StackPanel>
+                            </Grid>
                         </StackPanel>
                     </Border>
 
+                    <!-- Nhập khóa -->
                     <Border Background="#111827" CornerRadius="12" Padding="18" Margin="0,0,0,14">
                         <StackPanel>
+                            <TextBlock Style="{StaticResource TieuDe}" Text="Khóa API"/>
+
+                            <TextBlock Text="API Key" Style="{StaticResource Nhan}" Margin="0,0,0,4"/>
+                            <TextBox x:Name="txtApiKey" Style="{StaticResource O}" Height="36" FontFamily="Consolas"
+                                     TextChanged="Khoa_Changed"/>
+                            <TextBlock Text="API Secret" Style="{StaticResource Nhan}" Margin="0,10,0,4"/>
+                            <TextBox x:Name="txtApiSecret" Style="{StaticResource O}" Height="36" FontFamily="Consolas"
+                                     TextChanged="Khoa_Changed"/>
+
+                            <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                                <Button x:Name="btnLuuKhoa" Content="💾  Lưu &amp; kiểm tra" Style="{StaticResource Btn}"
+                                        Background="#16a34a" Height="38" Width="180" Click="btnLuuKhoa_Click"/>
+                                <Button x:Name="btnXoaKhoa" Content="Xóa khóa" Style="{StaticResource Btn}"
+                                        Background="#475569" Height="38" Width="110" Margin="10,0,0,0"
+                                        Click="btnXoaKhoa_Click"/>
+                                <TextBlock x:Name="lblKhoaKq" Foreground="#facc15" VerticalAlignment="Center"
+                                           Margin="14,0,0,0" TextWrapping="Wrap" Width="440"/>
+                            </StackPanel>
+
+                            <TextBlock x:Name="lblKhoaTomTat" Foreground="#64748b" TextWrapping="Wrap"
+                                       Margin="0,12,0,0" FontSize="12"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Cách tính tiền -->
+                    <Border Background="#111827" CornerRadius="12" Padding="18">
+                        <StackPanel>
                             <TextBlock Style="{StaticResource TieuDe}" Text="Tính phí thế nào"/>
-                            <TextBlock Foreground="#94a3b8" TextWrapping="Wrap" Margin="0,0,0,10"
+                            <TextBlock Foreground="#94a3b8" TextWrapping="Wrap" Margin="0,0,0,8"
                                        Text="• Mỗi tờ hóa đơn chỉ tính tiền MỘT LẦN. Hôm nay tải 10 tờ thì trừ 10; ngày mai cào lại đúng 10 tờ đó trừ 0."/>
-                            <TextBlock Foreground="#94a3b8" TextWrapping="Wrap" Margin="0,0,0,10"
+                            <TextBlock Foreground="#94a3b8" TextWrapping="Wrap" Margin="0,0,0,8"
                                        Text="• Tờ đã có sẵn trên máy thì không xin hạn mức, không tốn gì."/>
-                            <TextBlock Foreground="#94a3b8" TextWrapping="Wrap" Margin="0,0,0,10"
+                            <TextBlock Foreground="#94a3b8" TextWrapping="Wrap" Margin="0,0,0,8"
                                        Text="• Số tờ đã mua không hết hạn. Cài lại máy hay đổi máy vẫn giữ nguyên."/>
-                            <TextBlock Foreground="#94a3b8" TextWrapping="Wrap" Margin="0,0,0,10"
-                                       Text="• Đồng bộ và xuất Excel/PDF/XML thủ công KHÔNG tốn hạn mức — chỉ cào nền (tải sẵn ngầm) mới tính."/>
+                            <TextBlock Foreground="#94a3b8" TextWrapping="Wrap" Margin="0,0,0,8"
+                                       Text="• Đồng bộ và xuất Excel/PDF/XML thủ công KHÔNG tốn hạn mức — chỉ cào nền (tải sẵn ngầm) và kiểm tra nhà cung cấp mới dùng khóa."/>
                             <TextBlock Foreground="#64748b" TextWrapping="Wrap" FontSize="12"
                                        Text="Riêng tư: app chỉ gửi mã băm SHA-256 của từng tờ để đếm, không gửi nội dung hóa đơn. Máy chủ đếm chính xác nhưng không đọc được bạn tải hóa đơn của ai."/>
                         </StackPanel>
                     </Border>
 
-                    <Border Background="#111827" CornerRadius="12" Padding="18">
-                        <StackPanel>
-                            <TextBlock Style="{StaticResource TieuDe}" Text="Khóa API"/>
-                            <TextBlock Foreground="#94a3b8" TextWrapping="Wrap" Margin="0,0,0,10"
-                                       Text="Dùng chung một khóa cho cả hạn mức cào nền lẫn kiểm tra nhà cung cấp. Nhập ở tab &quot;Kiểm tra NCC&quot;."/>
-                            <TextBlock x:Name="lblKhoaTomTat" Foreground="#e2e8f0" TextWrapping="Wrap"/>
-                        </StackPanel>
-                    </Border>
-
                 </StackPanel>
             </ScrollViewer>
         </TabItem>
+
     </TabControl>
 </Window>

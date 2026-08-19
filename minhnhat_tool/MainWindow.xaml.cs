@@ -34,6 +34,7 @@ namespace minhnhat_tool
             Loaded += async (_, __) =>
             {
                 await Services.UpdateService.CheckAsync();
+                await CapNhatNhacKhoaAsync();
                 // Chạy BÙ cào nền nếu quá 1 ngày chưa chạy (đợi 1 phút cho app ổn định)
                 var st = Services.CaoNenSettings.HienTai;
                 if (st.Bat && !st.DaChayHomNay)
@@ -73,10 +74,85 @@ namespace minhnhat_tool
         // Người dùng bắt đầu thao tác thủ công -> dừng cào nền để không gọi TCT chồng nhau (tránh bị chặn)
         private void NhuongCaoNen() => _caoNenCts?.Cancel();
 
-        private void mnuCaiDat_Click(object sender, RoutedEventArgs e)
+        private void mnuCaiDat_Click(object sender, RoutedEventArgs e) => MoCaiDat(false);
+        private void btnCaiDat_Click(object sender, RoutedEventArgs e) => MoCaiDat(false);
+
+        private void MoCaiDat(bool tabKhoa)
         {
             NhuongCaoNen();
-            new CaiDatWindow { Owner = this }.ShowDialog();
+            CaiDatWindow.MoTabKhoa = tabKhoa;
+            try { new CaiDatWindow { Owner = this }.ShowDialog(); }
+            finally { CaiDatWindow.MoTabKhoa = false; }
+            _ = CapNhatNhacKhoaAsync();   // đóng cài đặt xong thì dải nhắc phải phản ánh ngay
+        }
+
+        // ===== Dải nhắc khóa API =====
+        // Chỉ hiện khi có việc phải làm: chưa có khóa, hoặc sắp/đã hết số tờ. Mọi thứ ổn thì im lặng —
+        // dải nhắc hiện thường trực sẽ bị bỏ qua đúng lúc cần đọc nhất.
+        private bool _anNhac;                 // người dùng bấm ✕ -> im tới khi mở lại app
+        private const int NGUONG_SAP_HET = 200;
+
+        private void btnNhacDong_Click(object sender, RoutedEventArgs e)
+        {
+            _anNhac = true;
+            brdNhacKhoa.Visibility = Visibility.Collapsed;
+        }
+
+        private void btnNhacHanhDong_Click(object sender, RoutedEventArgs e) => MoCaiDat(tabKhoa: true);
+
+        private async Task CapNhatNhacKhoaAsync()
+        {
+            if (_anNhac) return;
+            var tx = Services.TaxInfoSettings.HienTai;
+
+            if (!tx.DaCauHinh)
+            {
+                HienNhac("🔑", "Chưa có khóa API — cào nền và kiểm tra nhà cung cấp đang tắt",
+                         "Cào nền tải sẵn hóa đơn về máy để sáng ra xuất Excel/PDF gần như tức thì. " +
+                         "Mua theo số tờ, dùng dần, không hết hạn.", "Nhập khóa");
+                return;
+            }
+
+            // Xem hạn mức không tốn tờ nào; lỗi mạng thì im lặng, đừng dọa người dùng vô cớ.
+            Services.HanMuc hm;
+            try { hm = await new Services.QuotaClient(tx).ThongTinAsync(); }
+            catch { return; }
+            if (!hm.ThanhCong) { brdNhacKhoa.Visibility = Visibility.Collapsed; return; }
+
+            if (hm.ConLai <= 0)
+                HienNhac("⛔", "Đã hết số tờ hóa đơn",
+                         "Cào nền sẽ không tải thêm tờ nào cho tới khi nạp thêm. " +
+                         "Những tờ đã mua vẫn dùng bình thường.", "Nạp thêm", nang: true);
+            else if (hm.ConLai < NGUONG_SAP_HET)
+                HienNhac("⚠", $"Sắp hết: còn {hm.ConLai:N0} tờ hóa đơn",
+                         "Nạp thêm trước khi vào kỳ kê khai để cào nền không bị đứt giữa chừng.",
+                         "Nạp thêm");
+            else
+                brdNhacKhoa.Visibility = Visibility.Collapsed;
+        }
+
+        private void HienNhac(string icon, string tieuDe, string noiDung, string nut, bool nang = false)
+        {
+            lblNhacIcon.Text = icon;
+            lblNhacTieuDe.Text = tieuDe;
+            lblNhacNoiDung.Text = noiDung;
+            btnNhacHanhDong.Content = nut;
+
+            var vien = nang ? "#dc2626" : "#b45309";
+            brdNhacKhoa.BorderBrush = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFrom(vien)!;
+            btnNhacHanhDong.Background = brdNhacKhoa.BorderBrush;
+            lblNhacTieuDe.Foreground = nang
+                ? System.Windows.Media.Brushes.LightCoral
+                : (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFrom("#fbbf24")!;
+
+            if (Services.ThongTinLienHe.CoThongTin)
+            {
+                lblNhacLienHe.Text = "Liên hệ mua thêm: " + Services.ThongTinLienHe.MotDong();
+                lblNhacLienHe.Visibility = Visibility.Visible;
+            }
+            else lblNhacLienHe.Visibility = Visibility.Collapsed;
+
+            brdNhacKhoa.Visibility = Visibility.Visible;
         }
 
         // Toàn bộ hóa đơn đã tải (nguồn để lọc nội bộ, không mất khi tìm kiếm)
