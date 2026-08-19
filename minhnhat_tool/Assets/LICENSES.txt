@@ -1,0 +1,35 @@
+TÀI NGUYÊN BÊN THỨ BA DÙNG TRONG PHẦN MỀM NÀY
+=============================================
+
+1) Bộ icon Lucide  — https://lucide.dev  — giấy phép ISC
+   Các Geometry trong Assets/Icons.xaml được chuyển thẳng từ SVG của Lucide.
+   ISC cho phép dùng thương mại, sửa đổi và phân phối, KHÔNG bắt buộc ghi công
+   trong giao diện; chỉ cần giữ lại thông báo bản quyền như bên dưới.
+
+   ISC License
+
+   Copyright (c) for portions of Lucide are held by Cole Bemis 2013-2022 as
+   part of Feather (MIT). All other copyright (c) for Lucide are held by
+   Lucide Contributors 2022.
+
+   Permission to use, copy, modify, and/or distribute this software for any
+   purpose with or without fee is hereby granted, provided that the above
+   copyright notice and this permission notice appear in all copies.
+
+   THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+   WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+   MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+   ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+   WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+   ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+   OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+2) Logo WIN-tech (Assets/logo-wintech.png) — tài sản của CÔNG TY TNHH WIN TECH
+   SOLUTION. Không phải nguồn mở, không dùng cho mục đích khác.
+
+LƯU Ý KHI BỔ SUNG TÀI NGUYÊN MỚI
+--------------------------------
+Chỉ lấy từ nguồn KHÔNG bắt buộc ghi công: Lucide (ISC), Tabler / Phosphor /
+Feather (MIT), Material Symbols (Apache-2.0), minh họa unDraw.
+TRÁNH gói miễn phí của Flaticon và Freepik — bắt buộc ghi công, bán phần mềm
+mà quên là vi phạm giấy phép.

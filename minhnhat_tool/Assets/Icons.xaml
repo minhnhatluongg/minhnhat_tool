@@ -1,0 +1,90 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ====================================================================
+         BỘ ICON + MÀU THƯƠNG HIỆU
+
+         Icon lấy từ Lucide (https://lucide.dev) — giấy phép ISC, dùng thương mại
+         tự do, không phải ghi công. Xem Assets/LICENSES.txt.
+         Đây chính là bộ icon dashboard web đang dùng (lucide-react), nên app
+         desktop và trang quản trị nhìn ra cùng một sản phẩm.
+
+         Vì sao là Geometry chứ không phải file PNG/SVG: nét ở mọi mức DPI, đổi
+         màu theo giao diện, và không cần thêm thư viện nào.
+
+         Icon Lucide vẽ bằng NÉT (stroke) trên khung 24x24 — phải dùng
+         Stroke + StrokeThickness, KHÔNG dùng Fill, nếu không sẽ ra một khối đặc.
+         Dùng qua style IconNet ở dưới là đúng sẵn.
+         ==================================================================== -->
+
+    <!-- Màu lấy trực tiếp từ file logo WIN-tech, không phải màu tự đoán -->
+    <Color x:Key="MauDoWin">#FF0000</Color>
+    <Color x:Key="MauXanhWin">#2E58A6</Color>
+    <Color x:Key="MauXanhNhat">#4FA1CA</Color>
+
+    <SolidColorBrush x:Key="DoWin" Color="{StaticResource MauDoWin}"/>
+    <SolidColorBrush x:Key="XanhWin" Color="{StaticResource MauXanhWin}"/>
+    <!-- #2E58A6 quá tối để làm chữ trên nền đen; bản sáng hơn này mới đọc được -->
+    <SolidColorBrush x:Key="XanhSang" Color="#5AA9D6"/>
+    <SolidColorBrush x:Key="XanhNhat" Color="{StaticResource MauXanhNhat}"/>
+
+    <!-- Path icon dùng chung: canh giữa, nét bo tròn giống hệt bản gốc Lucide -->
+    <Style x:Key="IconNet" TargetType="Path">
+        <Setter Property="Stretch" Value="Uniform"/>
+        <Setter Property="Fill" Value="{x:Null}"/>
+        <Setter Property="StrokeThickness" Value="2"/>
+        <Setter Property="StrokeStartLineCap" Value="Round"/>
+        <Setter Property="StrokeEndLineCap" Value="Round"/>
+        <Setter Property="StrokeLineJoin" Value="Round"/>
+        <Setter Property="Stroke" Value="#94A3B8"/>
+        <Setter Property="Width" Value="18"/>
+        <Setter Property="Height" Value="18"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+        <GeometryGroup x:Key="IcCongTy">
+            <PathGeometry Figures="M10 12h4"/>
+            <PathGeometry Figures="M10 8h4"/>
+            <PathGeometry Figures="M14 21v-3a2 2 0 0 0-4 0v3"/>
+            <PathGeometry Figures="M6 10H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2"/>
+            <PathGeometry Figures="M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16"/>
+        </GeometryGroup>
+
+        <GeometryGroup x:Key="IcCanhBao">
+            <EllipseGeometry Center="12,12" RadiusX="10" RadiusY="10"/>
+            <PathGeometry Figures="M12,8 L12,12"/>
+            <PathGeometry Figures="M12,16 L12.01,16"/>
+        </GeometryGroup>
+
+        <GeometryGroup x:Key="IcChiaKhoa">
+            <PathGeometry Figures="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/>
+            <EllipseGeometry Center="16.5,7.5" RadiusX="0.5" RadiusY="0.5"/>
+        </GeometryGroup>
+
+        <GeometryGroup x:Key="IcDangTai">
+            <PathGeometry Figures="M21 12a9 9 0 1 1-6.219-8.56"/>
+        </GeometryGroup>
+
+        <GeometryGroup x:Key="IcKhoa">
+            <RectangleGeometry Rect="3,11,18,11" RadiusX="2" RadiusY="2"/>
+            <PathGeometry Figures="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </GeometryGroup>
+
+        <GeometryGroup x:Key="IcDangNhap">
+            <PathGeometry Figures="m10 17 5-5-5-5"/>
+            <PathGeometry Figures="M15 12H3"/>
+            <PathGeometry Figures="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+        </GeometryGroup>
+
+        <GeometryGroup x:Key="IcHoaDon">
+            <PathGeometry Figures="M12 17V7"/>
+            <PathGeometry Figures="M16 8h-6a2 2 0 0 0 0 4h4a2 2 0 0 1 0 4H8"/>
+            <PathGeometry Figures="M4 3a1 1 0 0 1 1-1 1.3 1.3 0 0 1 .7.2l.933.6a1.3 1.3 0 0 0 1.4 0l.934-.6a1.3 1.3 0 0 1 1.4 0l.933.6a1.3 1.3 0 0 0 1.4 0l.933-.6a1.3 1.3 0 0 1 1.4 0l.934.6a1.3 1.3 0 0 0 1.4 0l.933-.6A1.3 1.3 0 0 1 19 2a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1 1.3 1.3 0 0 1-.7-.2l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.934.6a1.3 1.3 0 0 1-1.4 0l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-1.4 0l-.934-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-.7.2 1 1 0 0 1-1-1z"/>
+        </GeometryGroup>
+
+        <GeometryGroup x:Key="IcKhiem">
+            <PathGeometry Figures="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>
+            <PathGeometry Figures="m9 12 2 2 4-4"/>
+        </GeometryGroup>
+
+</ResourceDictionary>

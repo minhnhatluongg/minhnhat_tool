@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Windows;
 using System.Windows.Media;
 using minhnhat_tool.Services;
@@ -12,6 +12,8 @@ namespace minhnhat_tool
         public LoginWindow()
         {
             InitializeComponent();
+            var v = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            if (v != null) txtPhienBan.Text = $"Phiên bản {v.Major}.{v.Minor}.{v.Build}";
         }
 
         private async void btnLogin_Click(object sender, RoutedEventArgs e)
@@ -48,10 +50,13 @@ namespace minhnhat_tool
             }
         }
 
+        /// <summary>Đổi cả chữ lẫn icon dòng trạng thái — icon báo tình huống nhanh hơn đọc chữ.</summary>
         private void ShowStatus(string msg, bool isError)
         {
             txtStatus.Text = msg;
             txtStatus.Foreground = isError ? Brushes.Tomato : Brushes.LightGray;
+            icoStatus.Stroke = isError ? Brushes.Tomato : Brushes.LightGray;
+            icoStatus.Data = (Geometry)FindResource(isError ? "IcCanhBao" : "IcDangTai");
         }
     }
 }
