@@ -194,64 +194,102 @@ namespace minhnhat_tool
         // 🛡 Kiểm tra rủi ro: tra tình trạng MST đối tác qua tracuunnt — CHẠY SONG SONG 4 luồng, chỉ tra MST duy nhất.
         private async void btnRuiRo_Click(object sender, RoutedEventArgs e)
         {
-            var rows = _hoaDon.ToList();
-            if (rows.Count == 0) { MessageBox.Show("Chưa có hóa đơn để kiểm tra."); return; }
+            await KiemTraNccAsync(hienThongBao: true);
+        }
 
-            // Danh sách MST đối tác DUY NHẤT chưa có trong cache (nhiều HĐ cùng NCC -> tra 1 lần)
+        /// <summary>Kiểm tra tình trạng nhà cung cấp cho các hóa đơn ĐANG HIỂN THỊ.
+        ///
+        /// Gọi dịch vụ taxinfo bằng endpoint HÀNG LOẠT — gộp trùng MST trước khi gửi (một nhà cung cấp
+        /// xuất hiện ở 10 hóa đơn chỉ tra 1 lần), và bỏ qua MST đã tra trong phiên. Cách cũ gọi từng
+        /// MST song song nhiều luồng nên gây quá tải và đã phải tắt đi.</summary>
+        private async Task KiemTraNccAsync(bool hienThongBao)
+        {
+            var rows = _hoaDon.ToList();
+            if (rows.Count == 0)
+            {
+                if (hienThongBao) MessageBox.Show("Chưa có hóa đơn để kiểm tra.");
+                return;
+            }
+
+            var cf = Services.TaxInfoSettings.HienTai;
+            if (!cf.DaCauHinh)
+            {
+                if (hienThongBao)
+                    MessageBox.Show("Chưa cấu hình khóa tra cứu tình trạng nhà cung cấp.\n\n" +
+                                    "Vào menu (chuột phải trên bảng) → Cài đặt để nhập API Key / Secret.",
+                                    "Chưa cấu hình", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            // MST đối tác DUY NHẤT, bỏ những cái đã tra trong phiên này
             var mstList = rows
                 .Select(r => _lastIsMuaVao ? (r.Raw?.Nbmst ?? "") : (r.Raw?.Nmmst ?? ""))
-                .Where(m => !string.IsNullOrEmpty(m))
-                .Distinct()
+                .Where(m => !string.IsNullOrWhiteSpace(m))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Where(m => !_nccRisk.ContainsKey(m))
                 .ToList();
 
-            ShowProgress($"Đang kiểm tra {mstList.Count} nhà cung cấp (song song 4 luồng)...");
-            int done = 0;
-            using var sem = new System.Threading.SemaphoreSlim(4);   // tối đa 4 "worker" cùng lúc
-            try
+            if (mstList.Count > 0)
             {
-                var tasks = mstList.Select(async mst =>
+                NhuongCaoNen();
+                ShowProgress($"Đang kiểm tra {mstList.Count} nhà cung cấp...");
+                try
                 {
-                    await sem.WaitAsync();
-                    try
-                    {
-                        if (Cancelled) return;
-                        var (_, _, status) = await _tct.TcnntLookupAsync(mst, Ct);
-                        bool risk = !string.IsNullOrEmpty(status)
-                                    && status.IndexOf("đang hoạt động", StringComparison.OrdinalIgnoreCase) < 0;
-                        // Code sau await chạy trên UI thread -> ghi cache an toàn, không cần khóa
-                        _nccRisk[mst] = (string.IsNullOrEmpty(status) ? "Không tra được" : status, risk);
-                    }
-                    finally
-                    {
-                        done++;
-                        SetProgress(done, mstList.Count, $"Đã kiểm tra {done}/{mstList.Count} nhà cung cấp...");
-                        sem.Release();
-                    }
-                }).ToList();
-                await Task.WhenAll(tasks);
+                    var cli = new Services.TaxInfoClient(cf);
+                    var kq = await cli.TraAsync(mstList,
+                        (xong, tong) => Dispatcher.Invoke(() =>
+                            SetProgress(xong, tong, $"Đang kiểm tra {xong}/{tong} nhà cung cấp...")),
+                        Ct);
 
-                // Map kết quả (từ cache) vào từng dòng hóa đơn
-                int risky = 0;
-                foreach (var r in rows)
-                {
-                    string mst = _lastIsMuaVao ? (r.Raw?.Nbmst ?? "") : (r.Raw?.Nmmst ?? "");
-                    if (!string.IsNullOrEmpty(mst) && _nccRisk.TryGetValue(mst, out var info))
+                    foreach (var it in kq.Items)
+                        if (!string.IsNullOrWhiteSpace(it.Mst))
+                            _nccRisk[it.Mst] = (it.HienThi, it.RuiRo);
+
+                    if (kq.Items.Count == 0 && !string.IsNullOrEmpty(kq.ThongBao))
                     {
-                        r.TinhTrangNcc = info.status; r.NccRuiRo = info.risk;
-                        if (info.risk) risky++;
+                        if (hienThongBao) MessageBox.Show(kq.ThongBao, "Không kiểm tra được",
+                                                          MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return;
                     }
+                    _lanTraCuoi = kq;
                 }
-                grdHoaDon.Items.Refresh();
-                string prefix = Cancelled ? "Đã HỦY (kết quả 1 phần đã có). " : "Đã kiểm tra xong. ";
-                MessageBox.Show(risky == 0
-                    ? prefix + "Không phát hiện đối tác rủi ro."
-                    : prefix + $"⚠ Phát hiện {risky} hóa đơn có đối tác RỦI RO (không ở trạng thái 'đang hoạt động').\nCác dòng đã được tô đỏ.",
-                    "Kết quả kiểm tra rủi ro");
+                catch (OperationCanceledException) { }
+                catch (Exception ex)
+                {
+                    if (hienThongBao) MessageBox.Show("Lỗi kiểm tra nhà cung cấp: " + ex.Message);
+                    return;
+                }
+                finally { HideProgress(); }
             }
-            catch (Exception ex) { MessageBox.Show("Lỗi kiểm tra rủi ro: " + ex.Message); }
-            finally { HideProgress(); }
+
+            // Đổ kết quả (từ cache phiên) vào từng dòng hóa đơn
+            int risky = 0, coKq = 0;
+            foreach (var r in rows)
+            {
+                string mst = _lastIsMuaVao ? (r.Raw?.Nbmst ?? "") : (r.Raw?.Nmmst ?? "");
+                if (!string.IsNullOrWhiteSpace(mst) && _nccRisk.TryGetValue(mst, out var info))
+                {
+                    r.TinhTrangNcc = info.status;
+                    r.NccRuiRo = info.risk;
+                    coKq++;
+                    if (info.risk) risky++;
+                }
+            }
+            grdHoaDon.Items.Refresh();
+
+            if (!hienThongBao) return;
+            string them = _lanTraCuoi == null ? ""
+                : $"\n\n(Tra {_lanTraCuoi.Items.Count} nhà cung cấp: {_lanTraCuoi.TuCache} từ bộ nhớ đệm, " +
+                  $"{_lanTraCuoi.GoiMoi} tra mới, trừ {_lanTraCuoi.TruLuot} lượt.)";
+            MessageBox.Show(risky == 0
+                ? $"Đã kiểm tra {coKq} hóa đơn. Không phát hiện nhà cung cấp bất thường." + them
+                : $"⚠ Phát hiện {risky} hóa đơn có nhà cung cấp KHÔNG ở trạng thái hoạt động bình thường.\n" +
+                  "Các dòng đã được tô đỏ — cần rà lại trước khi kê khai khấu trừ." + them,
+                "Kết quả kiểm tra nhà cung cấp", MessageBoxButton.OK,
+                risky == 0 ? MessageBoxImage.Information : MessageBoxImage.Warning);
         }
+
+        private Services.KetQuaTraNnt? _lanTraCuoi;
 
         // Tìm nội bộ: lọc trên dữ liệu ĐÃ tải (không gọi lại TCT). Gõ tới đâu lọc tới đó.
         private void btnTimNoiBo_Click(object sender, RoutedEventArgs e) => ApplyFilter();
@@ -973,13 +1011,22 @@ namespace minhnhat_tool
                     chunkStart = chunkEnd.AddDays(1);
                 }
 
+                // Ghi sổ kho: đồng bộ tay cũng phải vào thống kê, không chỉ mỗi cào nền.
+                Services.HoaDonCache.GhiKho(all, Session.Mst);
                 FillGrid(all, _lastIsMuaVao);
                 MessageBox.Show($"Đã tải {all.Count} hóa đơn {(_lastIsMuaVao ? "MUA VÀO" : "BÁN RA")} của {Session.TenDN}.",
                                 "Đồng bộ xong", MessageBoxButton.OK, MessageBoxImage.Information);
+
+                // Cào xong -> tự kiểm tra tình trạng nhà cung cấp (nếu đã cấu hình khóa tra cứu).
+                // Chỉ tra các MST DUY NHẤT nên vài chục hóa đơn thường chỉ tốn ít lượt.
+                if (Services.TaxInfoSettings.HienTai.TuKiemTraSauDongBo && all.Count > 0)
+                    await KiemTraNccAsync(hienThongBao: false);
             }
             catch (OperationCanceledException)
             {
                 // Người dùng bấm Hủy giữa chừng — không phải lỗi
+                // Ghi sổ kho: đồng bộ tay cũng phải vào thống kê, không chỉ mỗi cào nền.
+                Services.HoaDonCache.GhiKho(all, Session.Mst);
                 FillGrid(all, _lastIsMuaVao);
                 MessageBox.Show($"Đã hủy. Giữ lại {all.Count} hóa đơn đã tải được.",
                                 "Đã hủy", MessageBoxButton.OK, MessageBoxImage.Information);
