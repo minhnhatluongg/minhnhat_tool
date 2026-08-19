@@ -1,39 +1,17 @@
 ﻿<Window x:Class="minhnhat_tool.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="clr-namespace:minhnhat_tool.Ui"
         Title="Phần mềm quản lý hóa đơn" Height="720" Width="1200"
         Icon="app.ico" Language="vi-VN"
         WindowStartupLocation="CenterScreen" Background="#0b0f1a">
 
     <!-- ===== STYLE dùng chung (cho nút bo góc, dark) ===== -->
     <Window.Resources>
-        <Style x:Key="Btn" TargetType="Button">
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="Background" Value="#2563eb"/>
-            <Setter Property="Height" Value="38"/>
-            <Setter Property="Padding" Value="16,0"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="bd" Background="{TemplateBinding Background}"
-                                CornerRadius="8" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Opacity" Value="0.88"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-        <Style x:Key="BtnGreen" TargetType="Button" BasedOn="{StaticResource Btn}">
+        <Style x:Key="BtnGreen" TargetType="Button" BasedOn="{StaticResource Nut}">
             <Setter Property="Background" Value="#16a34a"/>
         </Style>
-        <Style x:Key="BtnOrange" TargetType="Button" BasedOn="{StaticResource Btn}">
+        <Style x:Key="BtnOrange" TargetType="Button" BasedOn="{StaticResource Nut}">
             <Setter Property="Background" Value="#ea8a1e"/>
         </Style>
         <Style x:Key="Card" TargetType="Border">
@@ -48,109 +26,10 @@
         </Style>
 
         <!-- ===== Dark ComboBox ===== -->
-        <Style x:Key="DarkComboItem" TargetType="ComboBoxItem">
-            <Setter Property="Foreground" Value="#e2e8f0"/>
-            <Setter Property="Padding" Value="12,8"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ComboBoxItem">
-                        <Border x:Name="bd" Background="Transparent" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsHighlighted" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#16a34a"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
 
-        <Style x:Key="DarkCombo" TargetType="ComboBox">
-            <Setter Property="Foreground" Value="#e2e8f0"/>
-            <Setter Property="Height" Value="38"/>
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="ItemContainerStyle" Value="{StaticResource DarkComboItem}"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ComboBox">
-                        <Grid>
-                            <ToggleButton Focusable="False" ClickMode="Press"
-                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
-                                <ToggleButton.Template>
-                                    <ControlTemplate TargetType="ToggleButton">
-                                        <Border Background="#0f172a" BorderBrush="#334155" BorderThickness="1" CornerRadius="6">
-                                            <Path HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,12,0"
-                                                  Data="M0,0 L8,0 L4,5 Z" Fill="#94a3b8"/>
-                                        </Border>
-                                    </ControlTemplate>
-                                </ToggleButton.Template>
-                            </ToggleButton>
-                            <ContentPresenter Content="{TemplateBinding SelectionBoxItem}"
-                                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
-                                              Margin="12,0,28,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
-                            <Popup IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom"
-                                   AllowsTransparency="True" Focusable="False" PopupAnimation="Slide">
-                                <Border Background="#111827" BorderBrush="#334155" BorderThickness="1" CornerRadius="6"
-                                        MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
-                                        MaxHeight="260" Margin="0,4,0,0">
-                                    <ScrollViewer>
-                                        <StackPanel IsItemsHost="True"/>
-                                    </ScrollViewer>
-                                </Border>
-                            </Popup>
-                        </Grid>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
 
         <!-- ===== Dark DatePicker ===== -->
-        <Style TargetType="DatePickerTextBox">
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="DatePickerTextBox">
-                        <ScrollViewer x:Name="PART_ContentHost" VerticalAlignment="Center"/>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
 
-        <Style x:Key="DarkDatePicker" TargetType="DatePicker">
-            <Setter Property="Height" Value="38"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="DatePicker">
-                        <Border Background="#0f172a" BorderBrush="#334155" BorderThickness="1" CornerRadius="6">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <DatePickerTextBox x:Name="PART_TextBox" Grid.Column="0"
-                                                   VerticalContentAlignment="Center" Margin="10,0,0,0"
-                                                   Background="Transparent" BorderThickness="0" Foreground="White"/>
-                                <Button x:Name="PART_Button" Grid.Column="1" Width="32" Focusable="False"
-                                        Foreground="#94a3b8" FontSize="14" Content="📅" Cursor="Hand">
-                                    <Button.Template>
-                                        <ControlTemplate TargetType="Button">
-                                            <Border Background="Transparent">
-                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                            </Border>
-                                        </ControlTemplate>
-                                    </Button.Template>
-                                </Button>
-                                <Popup x:Name="PART_Popup" StaysOpen="False" AllowsTransparency="True"
-                                       Placement="Bottom" PlacementTarget="{Binding ElementName=PART_TextBox}"/>
-                            </Grid>
-                        </Border>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
 
         <!-- Canh lề nội dung ô bảng -->
         <Style x:Key="CellCenter" TargetType="TextBlock">
@@ -175,16 +54,16 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <Button Grid.Column="0" x:Name="btnChonDN" Style="{StaticResource Btn}"
-                        Background="#1f2937" Content="📁  Chưa chọn doanh nghiệp"
+                <Button Grid.Column="0" x:Name="btnChonDN"
+                        Background="#1f2937" Content="Chưa chọn doanh nghiệp" ui:Ic.Glyph="{StaticResource IcCongTy}"
                         Click="btnChonDN_Click"/>
 
                 <TextBlock Grid.Column="1" Text="PHẦN MỀM QUẢN LÝ HÓA ĐƠN"
                            Foreground="#22d3ee" FontSize="20" FontWeight="Bold"
                            HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,16,0"/>
 
-                <Button Grid.Column="2" x:Name="btnCaiDat" Style="{StaticResource Btn}"
-                        Background="#1f2937" Content="⚙  Cài đặt" Click="btnCaiDat_Click"/>
+                <Button Grid.Column="2" x:Name="btnCaiDat"
+                        Background="#1f2937" Content="Cài đặt" ui:Ic.Glyph="{StaticResource IcCaiDat}" Click="btnCaiDat_Click"/>
             </Grid>
         </Border>
 
@@ -198,8 +77,9 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock x:Name="lblNhacIcon" Grid.Column="0" Text="🔑" FontSize="22"
-                           VerticalAlignment="Center" Margin="2,0,14,0"/>
+                <Path x:Name="icoNhac" Grid.Column="0" Style="{StaticResource IconNet}"
+                      Data="{StaticResource IcChiaKhoa}" Stroke="#FBBF24" Width="22" Height="22"
+                      VerticalAlignment="Center" Margin="2,0,14,0"/>
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                     <TextBlock x:Name="lblNhacTieuDe" Foreground="#fbbf24" FontWeight="Bold"
                                FontSize="14" TextWrapping="Wrap"/>
@@ -209,10 +89,10 @@
                                TextWrapping="Wrap" Margin="0,4,0,0" Visibility="Collapsed"/>
                 </StackPanel>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button x:Name="btnNhacHanhDong" Style="{StaticResource Btn}" Background="#b45309"
+                    <Button x:Name="btnNhacHanhDong" Background="#b45309"
                             Content="Nhập khóa" Click="btnNhacHanhDong_Click"/>
-                    <Button x:Name="btnNhacDong" Style="{StaticResource Btn}" Background="#334155"
-                            Width="42" Content="✕" Margin="8,0,0,0" Click="btnNhacDong_Click"/>
+                    <Button x:Name="btnNhacDong" Background="#334155"
+                            Width="42" Content="" ui:Ic.Glyph="{StaticResource IcDong}" Margin="8,0,0,0" Click="btnNhacDong_Click"/>
                 </StackPanel>
             </Grid>
         </Border>
@@ -223,16 +103,16 @@
                 <StackPanel Margin="0,0,24,0" VerticalAlignment="Bottom">
                     <TextBlock Text="LOẠI HÓA ĐƠN" Style="{StaticResource Lbl}"/>
                     <StackPanel Orientation="Horizontal">
-                        <Button x:Name="btnMuaVao" Content="Mua vào (đầu vào)" Style="{StaticResource Btn}"
+                        <Button x:Name="btnMuaVao" Content="Mua vào (đầu vào)"
                                 Background="#16a34a" Width="140" Click="btnLoaiHD_Click"/>
-                        <Button x:Name="btnBanRa" Content="Bán ra (đầu ra)" Style="{StaticResource Btn}"
+                        <Button x:Name="btnBanRa" Content="Bán ra (đầu ra)"
                                 Background="#1f2937" Width="130" Margin="8,0,0,0" Click="btnLoaiHD_Click"/>
                     </StackPanel>
                 </StackPanel>
 
                 <StackPanel Margin="0,0,24,0" VerticalAlignment="Bottom">
                     <TextBlock Text="KỲ KẾ TOÁN" Style="{StaticResource Lbl}"/>
-                    <ComboBox x:Name="cboKy" Width="150" Style="{StaticResource DarkCombo}" SelectedIndex="0"
+                    <ComboBox x:Name="cboKy" Width="150" SelectedIndex="0"
                               SelectionChanged="cboKy_SelectionChanged">
                         <ComboBoxItem>Theo Ngày</ComboBoxItem>
                         <ComboBoxItem>Theo Tháng</ComboBoxItem>
@@ -244,17 +124,17 @@
 
                 <StackPanel Margin="0,0,12,0" VerticalAlignment="Bottom">
                     <TextBlock Text="TỪ NGÀY" Style="{StaticResource Lbl}"/>
-                    <DatePicker x:Name="dpTuNgay" Width="140" Style="{StaticResource DarkDatePicker}"/>
+                    <DatePicker x:Name="dpTuNgay" Width="140"/>
                 </StackPanel>
 
                 <StackPanel Margin="0,0,24,0" VerticalAlignment="Bottom">
                     <TextBlock Text="ĐẾN NGÀY" Style="{StaticResource Lbl}"/>
-                    <DatePicker x:Name="dpDenNgay" Width="140" Style="{StaticResource DarkDatePicker}"/>
+                    <DatePicker x:Name="dpDenNgay" Width="140"/>
                 </StackPanel>
 
                 <StackPanel Margin="0,0,12,0" VerticalAlignment="Bottom">
                     <TextBlock Text="TRẠNG THÁI" Style="{StaticResource Lbl}"/>
-                    <ComboBox x:Name="cboTrangThai" Width="150" Style="{StaticResource DarkCombo}" SelectedIndex="0"
+                    <ComboBox x:Name="cboTrangThai" Width="150" SelectedIndex="0"
                               SelectionChanged="cboTrangThai_SelectionChanged">
                         <ComboBoxItem>Tất cả</ComboBoxItem>
                         <ComboBoxItem>Hóa đơn mới</ComboBoxItem>
@@ -266,7 +146,7 @@
 
                 <StackPanel Margin="0,0,12,0" VerticalAlignment="Bottom">
                     <TextBlock Text="LOẠI CHỨNG TỪ" Style="{StaticResource Lbl}"/>
-                    <ComboBox x:Name="cboLoaiCT" Width="160" Style="{StaticResource DarkCombo}" SelectedIndex="0"
+                    <ComboBox x:Name="cboLoaiCT" Width="160" SelectedIndex="0"
                               SelectionChanged="cboLoaiCT_SelectionChanged">
                         <ComboBoxItem>Tất cả</ComboBoxItem>
                         <ComboBoxItem>Hóa đơn điện tử</ComboBoxItem>
@@ -283,15 +163,15 @@
                 </StackPanel>
 
                 <StackPanel VerticalAlignment="Bottom" Orientation="Horizontal">
-                    <Button x:Name="btnTimNoiBo" Content="🔎  Tìm nội bộ" Style="{StaticResource Btn}"
+                    <Button x:Name="btnTimNoiBo" Content="Tìm nội bộ" ui:Ic.Glyph="{StaticResource IcTim}"
                             Width="150" Click="btnTimNoiBo_Click"/>
-                    <Button x:Name="btnDongBo" Content="☁  Đồng bộ Tổng cục Thuế" Style="{StaticResource BtnGreen}"
+                    <Button x:Name="btnDongBo" Content="Đồng bộ Tổng cục Thuế" ui:Ic.Glyph="{StaticResource IcDongBo}" Style="{StaticResource BtnGreen}"
                             Width="220" Margin="10,0,0,0" Click="btnDongBo_Click"/>
-                    <Button x:Name="btnThongKe" Content="📊  Thống kê" Style="{StaticResource Btn}"
+                    <Button x:Name="btnThongKe" Content="Thống kê" ui:Ic.Glyph="{StaticResource IcThongKe}"
                             Background="#7c3aed" Width="130" Margin="10,0,0,0" Click="btnThongKe_Click"/>
                     <!-- Bật lại: nay dùng API tra cứu HÀNG LOẠT (1 request cho cả danh sách,
                          gộp trùng MST + cache 12h phía dịch vụ) nên không còn gây quá tải. -->
-                    <Button x:Name="btnRuiRo" Content="🛡  Kiểm tra NCC" Style="{StaticResource Btn}"
+                    <Button x:Name="btnRuiRo" Content="Kiểm tra NCC" ui:Ic.Glyph="{StaticResource IcBaoVe}"
                             Background="#b91c1c" Width="160" Margin="10,0,0,0" Click="btnRuiRo_Click"/>
                 </StackPanel>
             </WrapPanel>
@@ -328,25 +208,25 @@
                 </DataGrid.Resources>
                 <DataGrid.ContextMenu>
                     <ContextMenu>
-                        <MenuItem Header="👁  Xem hóa đơn" Click="mnuXem_Click"/>
-                        <MenuItem Header="📥  Tải XML gốc" Click="mnuTaiXml_Click"/>
-                        <MenuItem Header="📄  Lưu PDF 1 tờ (mở xem rồi Ctrl+P)" Click="mnuTaiPdf_Click"/>
+                        <MenuItem Header="Xem hóa đơn" ui:Ic.Glyph="{StaticResource IcXem}" Click="mnuXem_Click"/>
+                        <MenuItem Header="Tải XML gốc" ui:Ic.Glyph="{StaticResource IcTai}" Click="mnuTaiXml_Click"/>
+                        <MenuItem Header="Lưu PDF 1 tờ (mở xem rồi Ctrl+P)" ui:Ic.Glyph="{StaticResource IcPdf}" Click="mnuTaiPdf_Click"/>
                         <Separator/>
-                        <MenuItem Header="📄  Xuất PDF (dòng đã chọn)" Click="mnuPdfChon_Click"/>
-                        <MenuItem Header="📄  Xuất PDF (tất cả)" Click="mnuPdf_Click"/>
+                        <MenuItem Header="Xuất PDF (dòng đã chọn)" ui:Ic.Glyph="{StaticResource IcPdf}" Click="mnuPdfChon_Click"/>
+                        <MenuItem Header="Xuất PDF (tất cả)" ui:Ic.Glyph="{StaticResource IcPdf}" Click="mnuPdf_Click"/>
                         <Separator/>
-                        <MenuItem Header="📦  Xuất XML gốc (dòng đã chọn)" Click="mnuXmlChon_Click"/>
-                        <MenuItem Header="📦  Xuất XML gốc (tất cả)" Click="mnuXml_Click"/>
+                        <MenuItem Header="Xuất XML gốc (dòng đã chọn)" ui:Ic.Glyph="{StaticResource IcXml}" Click="mnuXmlChon_Click"/>
+                        <MenuItem Header="Xuất XML gốc (tất cả)" ui:Ic.Glyph="{StaticResource IcXml}" Click="mnuXml_Click"/>
                         <Separator/>
-                        <MenuItem Header="📊  Xuất Excel (dòng đã chọn)" Click="mnuExcelChon_Click"/>
-                        <MenuItem Header="📊  Xuất Excel (tất cả)" Click="mnuExcel_Click"/>
+                        <MenuItem Header="Xuất Excel (dòng đã chọn)" ui:Ic.Glyph="{StaticResource IcThongKe}" Click="mnuExcelChon_Click"/>
+                        <MenuItem Header="Xuất Excel (tất cả)" ui:Ic.Glyph="{StaticResource IcThongKe}" Click="mnuExcel_Click"/>
                         <Separator/>
-                        <MenuItem Header="📋  Xuất bảng kê">
+                        <MenuItem Header="Xuất bảng kê" ui:Ic.Glyph="{StaticResource IcBangKe}">
                             <MenuItem Header="Khai thuế GTGT (theo hóa đơn) — nhanh, chuẩn TCT" Click="mnuBangKeKhaiThue_Click"/>
                             <MenuItem Header="Chi tiết theo dòng hàng (mẫu MISA)" Click="mnuBangKe_Click"/>
                         </MenuItem>
                         <Separator/>
-                        <MenuItem Header="⚙  Cài đặt" Click="mnuCaiDat_Click"/>
+                        <MenuItem Header="Cài đặt" ui:Ic.Glyph="{StaticResource IcCaiDat}" Click="mnuCaiDat_Click"/>
                     </ContextMenu>
                 </DataGrid.ContextMenu>
                 <DataGrid.ColumnHeaderStyle>
@@ -360,7 +240,7 @@
                     </Style>
                 </DataGrid.ColumnHeaderStyle>
                 <DataGrid.Columns>
-                    <DataGridTextColumn Header="Trạng thái XML" Binding="{Binding TrangThaiXml}" Width="110" ElementStyle="{StaticResource CellCenter}"/>
+                    <DataGridTextColumn Header="Trạng thái XML" Binding="{Binding TrangThaiXml}" Width="125" ElementStyle="{StaticResource CellCenter}"/>
                     <DataGridTextColumn Header="Ký hiệu"       Binding="{Binding KyHieu}"      Width="80"  ElementStyle="{StaticResource CellCenter}"/>
                     <DataGridTextColumn Header="Loại HĐ"       Binding="{Binding LoaiHD}"      Width="120">
                         <DataGridTextColumn.ElementStyle>
@@ -398,7 +278,7 @@
                                TextWrapping="Wrap" TextAlignment="Center" Margin="0,0,0,18"/>
                     <ProgressBar x:Name="barProgress" Height="20" Minimum="0" Maximum="100" Value="0"
                                  Foreground="#22c55e" Background="#0f172a" BorderThickness="0"/>
-                    <Button x:Name="btnCancel" Content="✖  Hủy" Style="{StaticResource Btn}"
+                    <Button x:Name="btnCancel" Content="Hủy" ui:Ic.Glyph="{StaticResource IcDong}"
                             Background="#b91c1c" Width="120" Height="36" Margin="0,18,0,0"
                             HorizontalAlignment="Center" Click="btnCancel_Click"/>
                 </StackPanel>

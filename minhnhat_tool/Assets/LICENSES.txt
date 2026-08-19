@@ -1,4 +1,4 @@
-TÀI NGUYÊN BÊN THỨ BA DÙNG TRONG PHẦN MỀM NÀY
+﻿TÀI NGUYÊN BÊN THỨ BA DÙNG TRONG PHẦN MỀM NÀY
 =============================================
 
 1) Bộ icon Lucide  — https://lucide.dev  — giấy phép ISC
@@ -23,9 +23,6 @@ TÀI NGUYÊN BÊN THỨ BA DÙNG TRONG PHẦN MỀM NÀY
    WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
    ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
    OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-
-2) Logo WIN-tech (Assets/logo-wintech.png) — tài sản của CÔNG TY TNHH WIN TECH
-   SOLUTION. Không phải nguồn mở, không dùng cho mục đích khác.
 
 LƯU Ý KHI BỔ SUNG TÀI NGUYÊN MỚI
 --------------------------------

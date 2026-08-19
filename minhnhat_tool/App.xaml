@@ -8,6 +8,7 @@
             <ResourceDictionary.MergedDictionaries>
                 <!-- Icon Lucide + màu thương hiệu, dùng chung cho mọi cửa sổ -->
                 <ResourceDictionary Source="Assets/Icons.xaml"/>
+                <ResourceDictionary Source="Assets/Controls.xaml"/>
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>

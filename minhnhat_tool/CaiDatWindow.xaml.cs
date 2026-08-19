@@ -42,7 +42,7 @@ namespace minhnhat_tool
 
             var tx = TaxInfoSettings.HienTai;
             txtApiKey.Text = tx.ApiKey;
-            txtApiSecret.Text = tx.ApiSecret;
+            pwdApiSecret.Password = tx.ApiSecret;
             chkTuKiemTra.IsChecked = tx.TuKiemTraSauDongBo;
 
             _dangNap = false;
@@ -320,9 +320,25 @@ namespace minhnhat_tool
             if (_dangNap) return;
             var tx = TaxInfoSettings.HienTai;
             tx.ApiKey = txtApiKey.Text.Trim();
-            tx.ApiSecret = txtApiSecret.Text.Trim();
+            tx.ApiSecret = KhoaBiMat();
             tx.TuKiemTraSauDongBo = chkTuKiemTra.IsChecked == true;
             tx.Luu();
+        }
+
+        /// <summary>Khóa bí mật lấy từ ô đang hiện — hai ô luôn được đồng bộ khi bật/tắt "Hiện".</summary>
+        private string KhoaBiMat()
+            => (chkHienKhoa.IsChecked == true ? txtApiSecret.Text : pwdApiSecret.Password).Trim();
+
+        /// <summary>Mặc định che khóa bí mật: người dùng hay chụp màn hình gửi đi hỏi, và ai đứng
+        /// cạnh cũng đọc được. Bấm "Hiện" khi cần kiểm tra lại chuỗi đã dán.</summary>
+        private void HienKhoa_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_dangNap) return;
+            bool hien = chkHienKhoa.IsChecked == true;
+            if (hien) txtApiSecret.Text = pwdApiSecret.Password;
+            else pwdApiSecret.Password = txtApiSecret.Text;
+            txtApiSecret.Visibility = hien ? Visibility.Visible : Visibility.Collapsed;
+            pwdApiSecret.Visibility = hien ? Visibility.Collapsed : Visibility.Visible;
         }
 
         private void Khoa_Changed(object sender, RoutedEventArgs e)
@@ -333,7 +349,7 @@ namespace minhnhat_tool
 
         private async void btnLuuKhoa_Click(object sender, RoutedEventArgs e)
         {
-            string k = txtApiKey.Text.Trim(), s = txtApiSecret.Text.Trim();
+            string k = txtApiKey.Text.Trim(), s = KhoaBiMat();
             if (k.Length == 0 || s.Length == 0)
             {
                 lblKhoaKq.Foreground = System.Windows.Media.Brushes.Khaki;
@@ -361,6 +377,7 @@ namespace minhnhat_tool
 
             txtApiKey.Text = "";
             txtApiSecret.Text = "";
+            pwdApiSecret.Password = "";
             LuuKhoa();
             CapNhatKhoa();
             CapNhatPhamVi();

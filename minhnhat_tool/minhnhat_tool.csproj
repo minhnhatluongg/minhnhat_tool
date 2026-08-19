@@ -12,7 +12,6 @@
 
   <ItemGroup>
     <Resource Include="app.ico" />
-    <Resource Include="Assets\logo-wintech.png" />
     <None Include="Assets\LICENSES.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

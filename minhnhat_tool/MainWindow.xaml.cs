@@ -107,7 +107,7 @@ namespace minhnhat_tool
 
             if (!tx.DaCauHinh)
             {
-                HienNhac("🔑", "Chưa có khóa API — cào nền và kiểm tra nhà cung cấp đang tắt",
+                HienNhac("IcChiaKhoa", "Chưa có khóa API — cào nền và kiểm tra nhà cung cấp đang tắt",
                          "Cào nền tải sẵn hóa đơn về máy để sáng ra xuất Excel/PDF gần như tức thì. " +
                          "Mua theo số tờ, dùng dần, không hết hạn.", "Nhập khóa");
                 return;
@@ -120,11 +120,11 @@ namespace minhnhat_tool
             if (!hm.ThanhCong) { brdNhacKhoa.Visibility = Visibility.Collapsed; return; }
 
             if (hm.ConLai <= 0)
-                HienNhac("⛔", "Đã hết số tờ hóa đơn",
+                HienNhac("IcCanhBao", "Đã hết số tờ hóa đơn",
                          "Cào nền sẽ không tải thêm tờ nào cho tới khi nạp thêm. " +
                          "Những tờ đã mua vẫn dùng bình thường.", "Nạp thêm", nang: true);
             else if (hm.ConLai < NGUONG_SAP_HET)
-                HienNhac("⚠", $"Sắp hết: còn {hm.ConLai:N0} tờ hóa đơn",
+                HienNhac("IcCanhBaoTG", $"Sắp hết: còn {hm.ConLai:N0} tờ hóa đơn",
                          "Nạp thêm trước khi vào kỳ kê khai để cào nền không bị đứt giữa chừng.",
                          "Nạp thêm");
             else
@@ -133,7 +133,7 @@ namespace minhnhat_tool
 
         private void HienNhac(string icon, string tieuDe, string noiDung, string nut, bool nang = false)
         {
-            lblNhacIcon.Text = icon;
+            icoNhac.Data = (System.Windows.Media.Geometry)FindResource(icon);
             lblNhacTieuDe.Text = tieuDe;
             lblNhacNoiDung.Text = noiDung;
             btnNhacHanhDong.Content = nut;
@@ -141,6 +141,7 @@ namespace minhnhat_tool
             var vien = nang ? "#dc2626" : "#b45309";
             brdNhacKhoa.BorderBrush = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFrom(vien)!;
             btnNhacHanhDong.Background = brdNhacKhoa.BorderBrush;
+            icoNhac.Stroke = brdNhacKhoa.BorderBrush;
             lblNhacTieuDe.Foreground = nang
                 ? System.Windows.Media.Brushes.LightCoral
                 : (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFrom("#fbbf24")!;
@@ -236,9 +237,10 @@ namespace minhnhat_tool
 
         private void UpdateDnButton()
         {
+            // Icon do ui:Ic.Glyph trong XAML lo, ở đây chỉ đặt chữ.
             btnChonDN.Content = string.IsNullOrEmpty(Session.Mst)
-                ? "📁  Chưa chọn doanh nghiệp"
-                : $"🏢  {Session.TenDN}  ({Session.Mst})";
+                ? "Chưa chọn doanh nghiệp"
+                : $"{Session.TenDN}  ({Session.Mst})";
         }
 
         // Chuyển Mua vào (đầu vào) <-> Bán ra (đầu ra)
