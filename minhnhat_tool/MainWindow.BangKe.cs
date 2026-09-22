@@ -35,7 +35,7 @@ namespace minhnhat_tool
             };
             if (dlg.ShowDialog() != true) return;
 
-            ShowProgress($"Đang lập bảng kê {rows.Count} hóa đơn...");
+            ShowProgress($"Đang lập bảng kê {rows.Count} hóa đơn...", tieuDe: "Đang lập bảng kê");
             try
             {
                 var lines = new List<LineKe>();
@@ -60,7 +60,7 @@ namespace minhnhat_tool
                 MessageBox.Show($"Đã xuất bảng kê MISA ({lines.Count} dòng hàng / {rows.Count} hóa đơn):\n{dlg.FileName}");
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(dlg.FileName) { UseShellExecute = true });
             }
-            catch (Exception ex) { MessageBox.Show("Lỗi xuất bảng kê: " + ex.Message); }
+            catch (Exception ex) { Ui.LoiDialog.Show(this, "Lỗi xuất bảng kê", ex); }
             finally { HideProgress(); }
         }
 
@@ -80,7 +80,7 @@ namespace minhnhat_tool
             if (dlg.ShowDialog() != true) return;
 
             var tu = dpTuNgay.SelectedDate.Value; var den = dpDenNgay.SelectedDate.Value;
-            ShowProgress("Đang lập bảng kê khai thuế (bán ra + mua vào)...");
+            ShowProgress("Đang lập bảng kê khai thuế (bán ra + mua vào)...", tieuDe: "Đang lập bảng kê");
             try
             {
                 var banRa = await FetchRangeAsync("sold", tu, den, "Đang tải hóa đơn bán ra");
@@ -93,7 +93,7 @@ namespace minhnhat_tool
                 MessageBox.Show($"Đã xuất bảng kê khai thuế:\n• Bán ra: {banRa.Count} HĐ\n• Mua vào: {muaVao.Count} HĐ\n{dlg.FileName}");
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(dlg.FileName) { UseShellExecute = true });
             }
-            catch (Exception ex) { MessageBox.Show("Lỗi xuất bảng kê: " + ex.Message); }
+            catch (Exception ex) { Ui.LoiDialog.Show(this, "Lỗi xuất bảng kê", ex); }
             finally { HideProgress(); }
         }
 

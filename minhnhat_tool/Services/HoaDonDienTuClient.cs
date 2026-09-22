@@ -11,10 +11,32 @@ namespace minhnhat_tool.Services
 {
     public class HoaDonDienTuClient
     {
-        private static readonly HttpClient http = new HttpClient();
+        // Mọi request tới hoadondientu đi qua handler bên dưới -> tự gắn Request-Id, không sót endpoint nào.
+        private static readonly HttpClient http = new HttpClient(new HddtHeaderHandler());
 
         private const string DECAPTCHA = "https://decapcha.win-tech.vn";
         private const string HDDT = "https://hoadondientu.gdt.gov.vn/api";
+
+        /// <summary>
+        /// Từ 9/2026 TCT bắt buộc header "Request-Id" (UUID v4, MỚI cho mỗi request) trên mọi lời gọi
+        /// tới hoadondientu.gdt.gov.vn; thiếu là bị 403 "Hệ thống phát hiện hành vi không hợp lệ".
+        /// Gắn ở tầng handler để đăng nhập, phân trang, chi tiết, XML, PDF... đều có mà không phải sửa từng chỗ.
+        /// </summary>
+        private sealed class HddtHeaderHandler : DelegatingHandler
+        {
+            public HddtHeaderHandler() : base(new HttpClientHandler()) { }
+
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage req, CancellationToken ct)
+            {
+                if (req.RequestUri != null &&
+                    req.RequestUri.Host.EndsWith("hoadondientu.gdt.gov.vn", StringComparison.OrdinalIgnoreCase))
+                {
+                    req.Headers.Remove("Request-Id");
+                    req.Headers.TryAddWithoutValidation("Request-Id", Guid.NewGuid().ToString());
+                }
+                return base.SendAsync(req, ct);
+            }
+        }
         // API key cho dịch vụ tra cứu MST (tracuunnt) — dùng để lấy TÊN nhà cung cấp từ MST
         private const string TCNNT_APIKEY = "dk_Fyl_NHVTteBK1m436yjbvCDBEmuJxWmr";
 
@@ -44,13 +66,27 @@ namespace minhnhat_tool.Services
             return ("", "", "");
         }
 
-        /// <summary>Đăng nhập hoadondientu (vượt captcha tự động) -> Bearer token.</summary>
+        /// <summary>Đăng nhập hoadondientu (vượt captcha tự động) -> Bearer token.
+        /// Mọi thất bại ném TctException: Message là câu dễ hiểu, phản hồi thô nằm ở ChiTiet.</summary>
         public async Task<string> LoginAsync(string username, string password, CancellationToken ct = default)
         {
-            var cap = await http.GetFromJsonAsync<CaptchaSolve>($"{DECAPTCHA}/captcha/solve", ct);
+            // 1) Nhờ dịch vụ decapcha lấy + giải captcha của TCT
+            CaptchaSolve? cap;
+            try
+            {
+                cap = await http.GetFromJsonAsync<CaptchaSolve>($"{DECAPTCHA}/captcha/solve", ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception ex)   // lỗi mạng / hết thời gian chờ / dịch vụ trả lỗi
+            {
+                throw new TctException("Đăng nhập thất bại: không kết nối được dịch vụ giải mã xác nhận (captcha). " +
+                                       "Kiểm tra mạng rồi thử lại.", 0, ex.ToString(), ex);
+            }
             if (cap == null || string.IsNullOrEmpty(cap.token))
-                throw new Exception("Không kết nối được dịch vụ giải mã xác nhận.");
+                throw new TctException("Đăng nhập thất bại: dịch vụ giải mã xác nhận (captcha) không trả kết quả. Thử lại sau ít giây.",
+                                       0, cap == null ? "captcha/solve trả về rỗng" : JsonSerializer.Serialize(cap));
 
+            // 2) Đăng nhập TCT bằng captcha đã giải
             var body = new
             {
                 ckey = cap.key,
@@ -59,13 +95,34 @@ namespace minhnhat_tool.Services
                 password = password
             };
 
-            var resp = await http.PostAsJsonAsync($"{HDDT}/security-taxpayer/authenticate", body, ct);
-            string json = await resp.Content.ReadAsStringAsync(ct);
+            HttpResponseMessage resp;
+            string json;
+            try
+            {
+                resp = await http.PostAsJsonAsync($"{HDDT}/security-taxpayer/authenticate", body, ct);
+                json = await resp.Content.ReadAsStringAsync(ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception ex)
+            {
+                throw new TctException("Đăng nhập thất bại: không kết nối được tới Tổng cục Thuế (mạng chập chờn hoặc hết thời gian chờ).",
+                                       0, ex.ToString(), ex);
+            }
             if (!resp.IsSuccessStatusCode)
-                throw new Exception("Sai MST hoặc mật khẩu (hoặc TCT từ chối). Chi tiết: " + json);
+                throw TctException.TuPhanHoi("Đăng nhập thất bại", (int)resp.StatusCode, json);
 
-            using var doc = JsonDocument.Parse(json);
-            return doc.RootElement.GetProperty("token").GetString() ?? "";
+            // 3) Lấy token; TCT trả 200 mà không có token cũng coi là lỗi, không để nổ KeyNotFound
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.ValueKind == JsonValueKind.Object &&
+                    doc.RootElement.TryGetProperty("token", out var tk) &&
+                    tk.ValueKind == JsonValueKind.String && !string.IsNullOrEmpty(tk.GetString()))
+                    return tk.GetString()!;
+            }
+            catch (JsonException) { }
+            throw new TctException("Đăng nhập thất bại: Tổng cục Thuế không trả về mã phiên đăng nhập.",
+                                   (int)resp.StatusCode, $"HTTP {(int)resp.StatusCode}" + Environment.NewLine + json);
         }
 
         /// <summary>Cào hóa đơn theo loại: "purchase" = Mua vào (đầu vào), "sold" = Bán ra (đầu ra).
@@ -123,21 +180,28 @@ namespace minhnhat_tool.Services
                         req.Headers.Add("Authorization", "Bearer " + token);
                         resp = await http.SendAsync(req, reqCts.Token);
                         json = await resp.Content.ReadAsStringAsync(reqCts.Token);
-                        if (resp.IsSuccessStatusCode) break;
+                        // TCT thỉnh thoảng trả 200 kèm TRANG HTML (bảo trì / cổng chặn) thay vì JSON
+                        // -> coi như 1 lần trượt, thử lại; tuyệt đối không đem HTML đi parse.
+                        if (resp.IsSuccessStatusCode && TctException.LaJson(json)) break;
                     }
                     catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }  // Hủy thật -> nổi lên
                     catch (OperationCanceledException) { resp = null; }   // quá 30s -> coi như 1 lần trượt, thử lại
                     catch (HttpRequestException) { resp = null; }         // lỗi mạng -> thử lại
                 }
 
-                if (resp == null || !resp.IsSuccessStatusCode)
+                bool khongPhaiJson = resp != null && resp.IsSuccessStatusCode && !TctException.LaJson(json);
+                if (resp == null || !resp.IsSuccessStatusCode || khongPhaiJson)
                 {
                     int code = resp == null ? 0 : (int)resp.StatusCode;
-                    bool transient = code == 0 || code == 429 || code >= 500;   // chặn tạm thời / lỗi mạng / timeout
+                    bool transient = code == 0 || code == 429 || code >= 500 || khongPhaiJson;   // chặn tạm thời / lỗi mạng / timeout / trang HTML
                     // Trang ĐẦU nguồn POS lỗi KHÔNG do chặn (vd 400/404: tài khoản không có nguồn này) -> bỏ qua êm.
                     if (!required && firstPage && !transient) return list;
                     // Còn lại (đang phân trang dở, hoặc bị chặn tạm thời): KHÔNG im lặng cắt bớt (sẽ THIẾU hóa đơn) -> báo lỗi để đồng bộ lại.
-                    throw new Exception($"Không tải hết {nguon} — TCT chặn/không phản hồi ({code}). Hãy bấm Đồng bộ lại. {json}");
+                    if (khongPhaiJson)
+                        throw TctException.KhongPhaiJson($"Không tải hết {nguon}, hãy bấm Đồng bộ lại", code,
+                                                         resp!.Content.Headers.ContentType?.ToString() ?? "(không có)",
+                                                         resp.RequestMessage?.RequestUri?.ToString() ?? url, json);
+                    throw TctException.TuPhanHoi($"Không tải hết {nguon}, hãy bấm Đồng bộ lại", code, json);
                 }
 
                 int truoc = list.Count;
@@ -236,6 +300,8 @@ namespace minhnhat_tool.Services
                     if (resp.IsSuccessStatusCode)
                     {
                         string s = await resp.Content.ReadAsStringAsync(reqCts.Token);
+                        // 200 nhưng thân là HTML (bảo trì / chặn) -> KHÔNG được cache rác, coi như trượt và thử lại
+                        if (!string.IsNullOrWhiteSpace(s) && !TctException.LaJson(s)) continue;
                         // 200 + rỗng = TCT khẳng định không có chi tiết -> kết quả CUỐI CÙNG
                         bool coCt = !string.IsNullOrWhiteSpace(s);
                         HoaDonCache.PutDetail(key, coCt ? s : "");   // cache kết quả CHẮC CHẮN (kể cả "không có")
@@ -268,7 +334,9 @@ namespace minhnhat_tool.Services
             var req = new HttpRequestMessage(HttpMethod.Get, url);
             req.Headers.Add("Authorization", "Bearer " + token);
             var resp = await http.SendAsync(req, ct);
-            return resp.IsSuccessStatusCode ? await resp.Content.ReadAsStringAsync(ct) : "";
+            if (!resp.IsSuccessStatusCode) return "";
+            string s = await resp.Content.ReadAsStringAsync(ct);
+            return TctException.LaJson(s) ? s : "";   // 200 kèm HTML -> coi như không có
         }
 
         /// <summary>Tải XML gốc (có chữ ký số) của 1 hóa đơn -> bytes. Có cache bền (XML bất biến).</summary>
@@ -284,8 +352,13 @@ namespace minhnhat_tool.Services
             req.Headers.Add("Authorization", "Bearer " + token);
             var resp = await http.SendAsync(req, ct);
             if (!resp.IsSuccessStatusCode)
-                throw new Exception($"Tải XML lỗi ({(int)resp.StatusCode}): {await resp.Content.ReadAsStringAsync(ct)}");
+                throw TctException.TuPhanHoi("Tải XML gốc thất bại", (int)resp.StatusCode, await resp.Content.ReadAsStringAsync(ct));
             var bytes = await resp.Content.ReadAsByteArrayAsync(ct);
+            if (TctException.LaHtml(bytes))   // 200 nhưng là trang web -> không phải XML, không được cache
+                throw TctException.KhongPhaiJson("Tải XML gốc thất bại", (int)resp.StatusCode,
+                                                 resp.Content.Headers.ContentType?.ToString() ?? "(không có)",
+                                                 resp.RequestMessage?.RequestUri?.ToString() ?? url,
+                                                 System.Text.Encoding.UTF8.GetString(bytes));
             HoaDonCache.PutXml(key, bytes);   // chỉ cache khi tải THÀNH CÔNG
             return bytes;
         }
@@ -300,7 +373,7 @@ namespace minhnhat_tool.Services
             req.Headers.Add("Authorization", "Bearer " + token);
             var resp = await http.SendAsync(req);
             if (!resp.IsSuccessStatusCode)
-                throw new Exception($"Tải PDF lỗi ({(int)resp.StatusCode}): {await resp.Content.ReadAsStringAsync()}");
+                throw TctException.TuPhanHoi("Tải PDF thất bại", (int)resp.StatusCode, await resp.Content.ReadAsStringAsync());
             return await resp.Content.ReadAsByteArrayAsync();
         }
 

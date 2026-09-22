@@ -60,7 +60,7 @@ namespace minhnhat_tool
             string? thuMuc = TaoThuMucLo("PDF", rows.Count);
             if (thuMuc == null) return;
 
-            ShowProgress($"Đang xuất {rows.Count} file PDF...");
+            ShowProgress($"Đang xuất {rows.Count} file PDF...", tieuDe: "Đang xuất PDF");
             var log = MoLog("PDF (bản thể hiện để xem/in)", rows.Count);
             int ok = 0, loi = 0;
             var daDung = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -103,7 +103,7 @@ namespace minhnhat_tool
                 MoThuMuc(thuMuc);
             }
             catch (OperationCanceledException) { HuyGiuaChung(log, thuMuc, $"{ok} PDF"); }
-            catch (Exception ex) { MessageBox.Show("Lỗi xuất PDF: " + ex.Message); }
+            catch (Exception ex) { Ui.LoiDialog.Show(this, "Lỗi xuất PDF", ex); }
             finally { HideProgress(); }
         }
 
@@ -114,7 +114,7 @@ namespace minhnhat_tool
             string? thuMuc = TaoThuMucLo("XML", rows.Count);
             if (thuMuc == null) return;
 
-            ShowProgress($"Đang tải {rows.Count} file XML gốc...");
+            ShowProgress($"Đang tải {rows.Count} file XML gốc...", tieuDe: "Đang tải XML gốc");
             var log = MoLog("XML GỐC có chữ ký số (giá trị pháp lý)", rows.Count);
             int ok = 0, loi = 0, done = 0;
             var daDung = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -175,7 +175,7 @@ namespace minhnhat_tool
                 MoThuMuc(thuMuc);
             }
             catch (OperationCanceledException) { HuyGiuaChung(log, thuMuc, $"{ok} XML"); }
-            catch (Exception ex) { MessageBox.Show("Lỗi xuất XML: " + ex.Message); }
+            catch (Exception ex) { Ui.LoiDialog.Show(this, "Lỗi xuất XML", ex); }
             finally { HideProgress(); }
         }
 

@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media.Animation;
 using minhnhat_tool.Models;
 using minhnhat_tool.Services;
 
@@ -30,6 +31,9 @@ namespace minhnhat_tool
             dpTuNgay.SelectedDate = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
             dpDenNgay.SelectedDate = DateTime.Today;
             UpdateDnButton();
+            pnlSkeleton.ItemsSource = Enumerable.Range(0, 9).ToList();   // 9 hàng khung xương khi đang tải
+            var ver = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            if (ver != null) lblPhienBan.Text = $"Phiên bản {ver.Major}.{ver.Minor}.{ver.Build}";
             CapNhatBangTrong(false);   // nói ngay đang thiếu bước nào, đừng để bảng trống trơn
             // Kiểm tra cập nhật ngầm khi mở app (chỉ chạy khi đã cài qua Setup)
             Loaded += async (_, __) =>
@@ -188,7 +192,7 @@ namespace minhnhat_tool
         // Lọc nội bộ theo ô tìm kiếm (MST người bán/mua, số HĐ, ký hiệu, tên) — chạy local, không gọi API
         private void ApplyFilter()
         {
-            if (lblSoLuong == null) return;   // UI đang khởi tạo, các label chưa sẵn sàng
+            if (lblSoLuong == null || lblDemBang == null) return;   // UI đang khởi tạo, các label chưa sẵn sàng
             string kw = (txtTimKiem?.Text ?? "").Trim().ToLowerInvariant();
             string tt = (cboTrangThai?.SelectedIndex ?? 0) > 0
                         ? ((ComboBoxItem)cboTrangThai.SelectedItem).Content?.ToString() ?? "" : "";
@@ -208,10 +212,13 @@ namespace minhnhat_tool
                 if (r.Raw != null) { sChua += r.Raw.Tgtcthue; sThue += r.Raw.Tgtthue; sTong += r.Raw.Tgtttbso; }
             }
             grdHoaDon.ItemsSource = _hoaDon;               // gắn lại -> render 1 lần
-            lblChuaThue.Text = $"Chưa thuế: {sChua:N0} VNĐ";
-            lblThue.Text = $"Thuế: {sThue:N0} VNĐ";
-            lblTong.Text = $"Tổng thanh toán: {sTong:N0} VNĐ";
-            lblSoLuong.Text = $"Số lượng: {_hoaDon.Count}/{_hoaDonAll.Count}  (máy tính tiền: {soPos})";
+            // Chân trang là 4 ô số liệu: nhãn nằm sẵn trong XAML, ở đây chỉ đổ số
+            lblChuaThue.Text = sChua.ToString("N0");
+            lblThue.Text = sThue.ToString("N0");
+            lblTong.Text = sTong.ToString("N0");
+            lblSoLuong.Text = $"{_hoaDon.Count:N0}/{_hoaDonAll.Count:N0}";
+            lblSoLuongPhu.Text = soPos > 0 ? $"đang xem / đã tải · {soPos} máy tính tiền" : "đang xem / đã tải";
+            lblDemBang.Text = _hoaDon.Count.ToString("N0");
             CapNhatBangTrong(kw.Length > 0 || tt.Length > 0 || loaiIdx > 0);
         }
 
@@ -219,8 +226,9 @@ namespace minhnhat_tool
         /// Hai tình huống này cần hai hành động khác nhau.</summary>
         private void CapNhatBangTrong(bool dangLoc)
         {
-            if (pnlTrongHD == null) return;
-            if (_hoaDon.Count > 0) { pnlTrongHD.Visibility = Visibility.Collapsed; return; }
+            if (pnlTrongHD == null || btnTrongHanhDong == null) return;
+            if (_hoaDon.Count > 0 || pnlSkeleton.Visibility == Visibility.Visible)
+            { pnlTrongHD.Visibility = Visibility.Collapsed; return; }
 
             pnlTrongHD.Visibility = Visibility.Visible;
             if (_hoaDonAll.Count > 0 && dangLoc)
@@ -228,14 +236,43 @@ namespace minhnhat_tool
                 icoTrongHD.Data = (System.Windows.Media.Geometry)FindResource("IcTim");
                 lblTrongHD.Text = "Không có hóa đơn nào khớp";
                 lblTrongHDPhu.Text = $"Đã lọc hết {_hoaDonAll.Count} hóa đơn đang xem — thử xóa từ khóa hoặc đổi bộ lọc.";
+                DatNutTrong(2, "Xóa bộ lọc", "IcXoaO");
+            }
+            else if (string.IsNullOrEmpty(Session.Mst))
+            {
+                icoTrongHD.Data = (System.Windows.Media.Geometry)FindResource("IcCongTy");
+                lblTrongHD.Text = "Chưa chọn doanh nghiệp";
+                lblTrongHDPhu.Text = "Chọn công ty cần xem hóa đơn trước, phần mềm sẽ đăng nhập Tổng cục Thuế bằng tài khoản đã lưu.";
+                DatNutTrong(0, "Chọn doanh nghiệp", "IcCongTy");
             }
             else
             {
                 icoTrongHD.Data = (System.Windows.Media.Geometry)FindResource("IcTimHoaDon");
                 lblTrongHD.Text = "Chưa có hóa đơn nào";
-                lblTrongHDPhu.Text = string.IsNullOrEmpty(Session.Mst)
-                    ? "Bấm nút doanh nghiệp ở góc trên để chọn công ty trước."
-                    : "Chọn khoảng ngày rồi bấm “Đồng bộ Tổng cục Thuế”.";
+                lblTrongHDPhu.Text = "Chọn khoảng ngày ở trên rồi đồng bộ để tải hóa đơn về máy.";
+                DatNutTrong(1, "Đồng bộ ngay", "IcDongBo");
+            }
+        }
+
+        // Nút trong màn trống: mỗi tình huống một việc, bấm là làm luôn không phải đi tìm nút ở đâu
+        private int _trongMode;   // 0 = chọn doanh nghiệp, 1 = đồng bộ, 2 = xóa bộ lọc
+        private void DatNutTrong(int mode, string chu, string icon)
+        {
+            _trongMode = mode;
+            btnTrongHanhDong.Content = chu;
+            Ui.Ic.SetGlyph(btnTrongHanhDong, (System.Windows.Media.Geometry)FindResource(icon));
+        }
+        private void btnTrongHanhDong_Click(object sender, RoutedEventArgs e)
+        {
+            switch (_trongMode)
+            {
+                case 0: btnChonDN_Click(sender, e); break;
+                case 1: btnDongBo_Click(sender, e); break;
+                default:
+                    txtTimKiem.Text = "";
+                    cboTrangThai.SelectedIndex = 0;
+                    cboLoaiCT.SelectedIndex = 0;
+                    break;
             }
         }
 
@@ -278,10 +315,15 @@ namespace minhnhat_tool
 
         private void UpdateLoaiHDButtons()
         {
-            var green = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFromString("#16a34a")!;
-            var gray = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFromString("#1f2937")!;
-            btnMuaVao.Background = _loaiHD == "purchase" ? green : gray;
-            btnBanRa.Background = _loaiHD == "sold" ? green : gray;
+            // Bộ chọn dạng khay: nút đang chọn nền xanh chữ trắng, nút kia trong suốt chữ mờ
+            var bc = new System.Windows.Media.BrushConverter();
+            var green = (System.Windows.Media.Brush)bc.ConvertFromString("#16A34A")!;
+            var muted = (System.Windows.Media.Brush)bc.ConvertFromString("#94A3B8")!;
+            bool mua = _loaiHD == "purchase";
+            btnMuaVao.Background = mua ? green : System.Windows.Media.Brushes.Transparent;
+            btnMuaVao.Foreground = mua ? System.Windows.Media.Brushes.White : muted;
+            btnBanRa.Background = mua ? System.Windows.Media.Brushes.Transparent : green;
+            btnBanRa.Foreground = mua ? muted : System.Windows.Media.Brushes.White;
         }
 
         // Mở Dashboard thống kê trên dữ liệu đang hiển thị
@@ -336,7 +378,7 @@ namespace minhnhat_tool
             if (mstList.Count > 0)
             {
                 NhuongCaoNen();
-                ShowProgress($"Đang kiểm tra {mstList.Count} nhà cung cấp...");
+                ShowProgress($"Đang kiểm tra {mstList.Count} nhà cung cấp...", tieuDe: "Đang kiểm tra nhà cung cấp");
                 try
                 {
                     var cli = new Services.TaxInfoClient(cf);
@@ -360,7 +402,7 @@ namespace minhnhat_tool
                 catch (OperationCanceledException) { }
                 catch (Exception ex)
                 {
-                    if (hienThongBao) MessageBox.Show("Lỗi kiểm tra nhà cung cấp: " + ex.Message);
+                    if (hienThongBao) Ui.LoiDialog.Show(this, "Lỗi kiểm tra nhà cung cấp", ex);
                     return;
                 }
                 finally { HideProgress(); }
@@ -465,7 +507,7 @@ namespace minhnhat_tool
                     detail = await _tct.GetInvoiceDetailAsync(_token, row.Raw);
                 HoaDonViewer.ShowInvoice(row.Raw, Session.TenDN, _lastIsMuaVao, detail);
             }
-            catch (Exception ex) { MessageBox.Show("Lỗi xem hóa đơn: " + ex.Message); }
+            catch (Exception ex) { Ui.LoiDialog.Show(this, "Lỗi xem hóa đơn", ex); }
         }
 
         private async void mnuTaiXml_Click(object sender, RoutedEventArgs e)
@@ -490,7 +532,7 @@ namespace minhnhat_tool
                     MessageBox.Show("Đã tải XML gốc:\n" + dlg.FileName);
                 }
             }
-            catch (Exception ex) { MessageBox.Show("Lỗi tải XML: " + ex.Message); }
+            catch (Exception ex) { Ui.LoiDialog.Show(this, "Lỗi tải XML", ex); }
         }
 
         // hoadondientu KHÔNG có file PDF trực tiếp -> mở bản Xem (giống 100%) để Ctrl+P lưu PDF
@@ -555,7 +597,7 @@ namespace minhnhat_tool
                         "Lấy cột liên quan?", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
             }
 
-            ShowProgress($"Đang xuất Excel {rows.Count} hóa đơn...");
+            ShowProgress($"Đang xuất Excel {rows.Count} hóa đơn...", tieuDe: "Đang xuất Excel");
             try
             {
                 using var wb = new ClosedXML.Excel.XLWorkbook();
@@ -785,7 +827,7 @@ namespace minhnhat_tool
                 MessageBox.Show($"Đã xuất Excel {rows.Count} hóa đơn:\n{dlg.FileName}");
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(dlg.FileName) { UseShellExecute = true });
             }
-            catch (Exception ex) { MessageBox.Show("Lỗi xuất Excel: " + ex.Message); }
+            catch (Exception ex) { Ui.LoiDialog.Show(this, "Lỗi xuất Excel", ex); }
             finally { HideProgress(); }
         }
 
@@ -1026,15 +1068,40 @@ namespace minhnhat_tool
         // ===== Progress overlay + Hủy =====
         private System.Threading.CancellationTokenSource? _cts;
 
-        private void ShowProgress(string text, bool indeterminate = false)
+        private System.Windows.Threading.DispatcherTimer? _timerTienTrinh;
+        private DateTime _tienTrinhBatDau;
+        private string _nhanDongBoCuoi = "";   // "Đồng bộ lúc 14:32" -> hiện lại trên chip khi rảnh
+
+        private void ShowProgress(string text, bool indeterminate = false, string tieuDe = "Đang xử lý")
         {
             _cts = new System.Threading.CancellationTokenSource();
             btnCancel.IsEnabled = true;
+            btnCancel.Content = "Hủy";
+            lblProgressTieuDe.Text = tieuDe;
             txtProgress.Text = text;
             barProgress.IsIndeterminate = indeterminate;
             barProgress.Value = 0;
             barProgress.Maximum = 1;
+            lblProgressPhanTram.Text = indeterminate ? "Đang chờ Tổng cục Thuế..." : "";
             overlayProgress.Visibility = Visibility.Visible;
+            rectTaiLine.Visibility = Visibility.Visible;   // vạch chạy dưới dải tiêu đề bảng
+            Sb("SbVachTai").Begin(this, true);
+            Sb("SbXoay").Begin(this, true);
+            DatTrangThaiApp(tieuDe + "...", "#22D3EE");
+
+            // Đồng hồ "đã chạy m:ss": việc lâu mà thấy số nhảy thì đỡ sốt ruột hơn nhiều
+            _tienTrinhBatDau = DateTime.Now;
+            lblProgressThoiGian.Text = "0:00";
+            if (_timerTienTrinh == null)
+            {
+                _timerTienTrinh = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+                _timerTienTrinh.Tick += (_, __) =>
+                {
+                    var t = DateTime.Now - _tienTrinhBatDau;
+                    lblProgressThoiGian.Text = t.TotalHours >= 1 ? t.ToString(@"h\:mm\:ss") : t.ToString(@"m\:ss");
+                };
+            }
+            _timerTienTrinh.Start();
         }
         private void SetProgress(int cur, int total, string text)
         {
@@ -1042,13 +1109,90 @@ namespace minhnhat_tool
             barProgress.Maximum = total <= 0 ? 1 : total;
             barProgress.Value = cur;
             if (!Cancelled) txtProgress.Text = text;   // đã bấm Hủy -> giữ chữ "Đang hủy...", không ghi đè
+            int pct = total <= 0 ? 0 : (int)Math.Round(100.0 * Math.Min(cur, total) / total);
+            lblProgressPhanTram.Text = $"{pct}%  ·  {cur:N0}/{total:N0}";
         }
         private void HideProgress()
         {
+            _timerTienTrinh?.Stop();
             overlayProgress.Visibility = Visibility.Collapsed;
+            barProgress.IsIndeterminate = false;   // dừng vệt quét, khỏi chạy ngầm khi đã ẩn
+            Sb("SbVachTai").Stop(this);
+            Sb("SbXoay").Stop(this);
+            rectTaiLine.Visibility = Visibility.Collapsed;
+            if (string.IsNullOrEmpty(_nhanDongBoCuoi)) DatTrangThaiApp("Sẵn sàng", "#22C55E");
+            else DatTrangThaiApp(_nhanDongBoCuoi, "#22C55E");
             _cts?.Dispose();
             _cts = null;
         }
+
+        // Storyboard khai báo trong Window.Resources, bật/tắt từ code để chỉ chạy đúng lúc cần
+        private Storyboard Sb(string key) => (Storyboard)FindResource(key);
+
+        /// <summary>Chip trạng thái ở header: chấm màu + chữ ngắn.</summary>
+        private void DatTrangThaiApp(string chu, string mau)
+        {
+            lblTrangThaiApp.Text = chu;
+            dotTrangThaiApp.Fill = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFromString(mau)!;
+        }
+
+        /// <summary>Sau khi đồng bộ xong: ghi mô tả lần tải lên dải tiêu đề bảng + chip trạng thái.</summary>
+        private void GhiNhanDongBo(string chieu, DateTime tu, DateTime den)
+        {
+            _nhanDongBoCuoi = $"Đồng bộ lúc {DateTime.Now:HH:mm}";
+            lblBangPhu.Text = $"Hóa đơn {chieu}  ·  {tu:dd/MM/yyyy} – {den:dd/MM/yyyy}  ·  {_nhanDongBoCuoi.ToLowerInvariant()}";
+        }
+
+        /// <summary>Khung xương thay chỗ bảng khi đang đồng bộ (che cả dữ liệu cũ lẫn màn trống).</summary>
+        private void HienSkeleton(bool bat)
+        {
+            pnlSkeleton.Visibility = bat ? Visibility.Visible : Visibility.Collapsed;
+            if (bat)
+            {
+                pnlTrongHD.Visibility = Visibility.Collapsed;
+                Sb("SbXuong").Begin(this, true);
+            }
+            else
+            {
+                Sb("SbXuong").Stop(this);
+                bool dangLoc = (txtTimKiem.Text ?? "").Trim().Length > 0 || cboTrangThai.SelectedIndex > 0 || cboLoaiCT.SelectedIndex > 0;
+                CapNhatBangTrong(dangLoc);
+            }
+        }
+
+        // ===== Thông báo nhanh (toast) góc dưới phải: không chặn thao tác, tự tắt sau 5 giây =====
+        private System.Windows.Threading.DispatcherTimer? _timerToast;
+
+        private void ThongBaoNhanh(string tieuDe, string noiDung, bool thanhCong = true)
+        {
+            var bc = new System.Windows.Media.BrushConverter();
+            lblToastTieuDe.Text = tieuDe;
+            lblToastNoiDung.Text = noiDung;
+            brdToastIcon.Background = (System.Windows.Media.Brush)bc.ConvertFromString(thanhCong ? "#0F2A1F" : "#3B2A12")!;
+            icoToast.Stroke = (System.Windows.Media.Brush)bc.ConvertFromString(thanhCong ? "#4ADE80" : "#FBBF24")!;
+            icoToast.Data = (System.Windows.Media.Geometry)FindResource(thanhCong ? "IcTick" : "IcCanhBao");
+
+            brdToast.Visibility = Visibility.Visible;
+            var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+            brdToast.BeginAnimation(OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(220)));
+            trToast.BeginAnimation(System.Windows.Media.TranslateTransform.YProperty, new DoubleAnimation(12, 0, TimeSpan.FromMilliseconds(260)) { EasingFunction = ease });
+
+            if (_timerToast == null)
+            {
+                _timerToast = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+                _timerToast.Tick += (_, __) => AnToast();
+            }
+            _timerToast.Stop();
+            _timerToast.Start();
+        }
+        private void AnToast()
+        {
+            _timerToast?.Stop();
+            var a = new DoubleAnimation(0, TimeSpan.FromMilliseconds(200));
+            a.Completed += (_, __) => { if (brdToast.Opacity < 0.01) brdToast.Visibility = Visibility.Collapsed; };
+            brdToast.BeginAnimation(OpacityProperty, a);
+        }
+        private void btnToastDong_Click(object sender, RoutedEventArgs e) => AnToast();
         // True nếu người dùng đã bấm Hủy
         private bool Cancelled => _cts?.IsCancellationRequested ?? false;
 
@@ -1059,7 +1203,10 @@ namespace minhnhat_tool
         {
             _cts?.Cancel();
             btnCancel.IsEnabled = false;
-            txtProgress.Text = "Đang hủy...";
+            btnCancel.Content = "Đang hủy...";
+            txtProgress.Text = "Đang dừng, giữ lại phần đã tải được...";
+            lblProgressPhanTram.Text = "";
+            DatTrangThaiApp("Đang hủy...", "#FBBF24");
         }
 
         // Nút Đồng bộ: đăng nhập + cào hóa đơn TRỰC TIẾP rồi đổ lên bảng (in-process, Cách A)
@@ -1089,9 +1236,12 @@ namespace minhnhat_tool
             }
             NhuongCaoNen();   // dừng cào nền để không gọi TCT chồng nhau
             btnDongBo.IsEnabled = false;
-            btnDongBo.Content = "⏳ Đang tải...";
+            btnDongBo.Content = "Đang đồng bộ...";
+            Ui.Ic.SetGlyph(btnDongBo, (System.Windows.Media.Geometry)FindResource("IcDangTai"));
+            HienSkeleton(true);
             string chieu = _loaiHD == "purchase" ? "đầu vào (mua vào)" : "đầu ra (bán ra)";
-            ShowProgress($"🔐 Bước 1/2: Đang đăng nhập Tổng cục Thuế...", indeterminate: true);
+            ShowProgress("Bước 1/2  ·  Đang đăng nhập Tổng cục Thuế (tự vượt captcha)...", indeterminate: true,
+                         tieuDe: "Đang đồng bộ Tổng cục Thuế");
             // Khai báo ngoài try để khi bấm Hủy vẫn giữ được phần đã tải
             var all = new List<HoaDonInfo>();
             try
@@ -1099,7 +1249,11 @@ namespace minhnhat_tool
                 _token = await _tct.LoginAsync(Session.Mst, Session.Password, Ct);
                 _lastIsMuaVao = _loaiHD == "purchase";
                 _lastLoai = _loaiHD;
-                if (!Cancelled) txtProgress.Text = $"📥 Bước 2/2: Đang đồng bộ hóa đơn {chieu}...";
+                if (!Cancelled)
+                {
+                    txtProgress.Text = $"Bước 2/2  ·  Đang tải danh sách hóa đơn {chieu}...";
+                    lblProgressPhanTram.Text = "Đã đăng nhập, đang tải theo từng tháng";
+                }
 
                 // Chia khoảng ngày thành từng tháng (TCT giới hạn <= 1 tháng/lần) -> hỗ trợ cả Quý/Năm
                 var chunkStart = dpTuNgay.SelectedDate.Value;
@@ -1113,18 +1267,20 @@ namespace minhnhat_tool
                     string thang = chunkStart.ToString("MM/yyyy");
                     var part = await _tct.QueryInvoicesAsync(_token, _loaiHD,
                                    chunkStart.ToString("dd/MM/yyyy"), chunkEnd.ToString("dd/MM/yyyy"),
-                                   (nguon, n) => { if (!Cancelled) txtProgress.Text = $"📥 Đang tải {nguon} tháng {thang}... (đã có {soFar + n})"; },
+                                   (nguon, n) => { if (!Cancelled) txtProgress.Text = $"Bước 2/2  ·  Đang tải {nguon} tháng {thang}... (đã có {soFar + n:N0})"; },
                                    Ct);
                     all.AddRange(part);
-                    if (!Cancelled) txtProgress.Text = $"📥 Đang đồng bộ {chieu}... (đã có {all.Count})";
+                    if (!Cancelled) txtProgress.Text = $"Bước 2/2  ·  Đang tải hóa đơn {chieu}... (đã có {all.Count:N0})";
                     chunkStart = chunkEnd.AddDays(1);
                 }
 
                 // Ghi sổ kho: đồng bộ tay cũng phải vào thống kê, không chỉ mỗi cào nền.
                 Services.HoaDonCache.GhiKho(all, Session.Mst);
+                HienSkeleton(false);
                 FillGrid(all, _lastIsMuaVao);
-                MessageBox.Show($"Đã tải {all.Count} hóa đơn {(_lastIsMuaVao ? "MUA VÀO" : "BÁN RA")} của {Session.TenDN}.",
-                                "Đồng bộ xong", MessageBoxButton.OK, MessageBoxImage.Information);
+                GhiNhanDongBo(chieu, dpTuNgay.SelectedDate.Value, dpDenNgay.SelectedDate.Value);
+                // Toast thay cho MessageBox: xong là thấy bảng ngay, không phải bấm OK thêm một lần
+                ThongBaoNhanh("Đồng bộ xong", $"Đã tải {all.Count:N0} hóa đơn {chieu} của {Session.TenDN}.");
 
                 // Cào xong -> tự kiểm tra tình trạng nhà cung cấp (nếu đã cấu hình khóa tra cứu).
                 // Chỉ tra các MST DUY NHẤT nên vài chục hóa đơn thường chỉ tốn ít lượt.
@@ -1136,19 +1292,21 @@ namespace minhnhat_tool
                 // Người dùng bấm Hủy giữa chừng — không phải lỗi
                 // Ghi sổ kho: đồng bộ tay cũng phải vào thống kê, không chỉ mỗi cào nền.
                 Services.HoaDonCache.GhiKho(all, Session.Mst);
+                HienSkeleton(false);
                 FillGrid(all, _lastIsMuaVao);
-                MessageBox.Show($"Đã hủy. Giữ lại {all.Count} hóa đơn đã tải được.",
-                                "Đã hủy", MessageBoxButton.OK, MessageBoxImage.Information);
+                ThongBaoNhanh("Đã hủy", $"Giữ lại {all.Count:N0} hóa đơn đã tải được.", thanhCong: false);
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Không tải được hóa đơn: " + ex.Message,
-                                "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
+                // Hộp thoại riêng: câu dễ hiểu ở trên, JSON/mã HTTP của TCT gập trong "Chi tiết kỹ thuật"
+                Ui.LoiDialog.Show(this, "Không tải được hóa đơn", ex);
             }
             finally
             {
                 btnDongBo.IsEnabled = true;
-                btnDongBo.Content = "☁  Đồng bộ Tổng cục Thuế";
+                btnDongBo.Content = "Đồng bộ Tổng cục Thuế";
+                Ui.Ic.SetGlyph(btnDongBo, (System.Windows.Media.Geometry)FindResource("IcDongBo"));
+                HienSkeleton(false);
                 HideProgress();
             }
         }
