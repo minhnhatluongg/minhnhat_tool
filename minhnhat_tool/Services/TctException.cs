@@ -34,7 +34,8 @@ namespace minhnhat_tool.Services
             string tctBao = LayMessage(phanHoi);
             string chiTiet = $"HTTP {maLoi}";
             if (!string.IsNullOrWhiteSpace(phanHoi)) chiTiet += Environment.NewLine + phanHoi.Trim();
-            return new TctException($"{viec}: {TomTat(maLoi, tctBao)}", maLoi, chiTiet);
+            bool dangNhap = viec.StartsWith("Đăng nhập", StringComparison.OrdinalIgnoreCase);
+            return new TctException($"{viec}: {TomTat(maLoi, tctBao, dangNhap)}", maLoi, chiTiet);
         }
 
         /// <summary>
@@ -73,17 +74,34 @@ namespace minhnhat_tool.Services
             return dau.StartsWith("<!doctype html") || dau.StartsWith("<html");
         }
 
+        /// <summary>Thêm nhật ký từng lần thử vào phần chi tiết kỹ thuật (giữ nguyên câu cho người dùng).</summary>
+        public TctException KemNhatKy(string nhatKy)
+        {
+            if (string.IsNullOrWhiteSpace(nhatKy)) return this;
+            string nl = Environment.NewLine;
+            string ct = string.IsNullOrWhiteSpace(ChiTiet) ? nhatKy : ChiTiet + nl + nl + nhatKy;
+            return new TctException(Message, MaLoi, ct, InnerException);
+        }
+
         /// <summary>Câu tóm tắt cho người dùng theo mã HTTP và câu TCT báo (nếu có).</summary>
-        private static string TomTat(int ma, string tctBao)
+        private static string TomTat(int ma, string tctBao, bool dangNhap)
         {
             string b = tctBao.ToLowerInvariant();
-            if (b.Contains("captcha") || b.Contains("mã xác nhận"))
-                return "mã xác nhận (captcha) giải sai. Hãy bấm thử lại.";
-            if (ma == 401 || b.Contains("mật khẩu") || b.Contains("password") || b.Contains("tài khoản"))
-                return "sai mã số thuế hoặc mật khẩu.";
-
             // Câu của TCT (nếu có) đưa xuống dòng riêng, đã là tiếng Việt dễ đọc, không phải JSON.
             string goc = string.IsNullOrEmpty(tctBao) ? "" : Environment.NewLine + "TCT báo: " + tctBao;
+
+            if (b.Contains("captcha") || b.Contains("mã xác nhận"))
+                return "mã xác nhận (captcha) giải sai nhiều lần liền. Bấm Đồng bộ để thử lại.";
+            // TCT khóa tài khoản sau nhiều lần sai: nói thẳng là bị khóa, đừng để người dùng gõ lại mật khẩu
+            if (b.Contains("khoá") || b.Contains("khóa"))
+                return "tài khoản đang bị Tổng cục Thuế tạm khóa do nhập sai thông tin nhiều lần. " +
+                       "Đợi hết thời gian khóa hoặc mở khóa trên hoadondientu.gdt.gov.vn rồi thử lại." + goc;
+            if (b.Contains("mật khẩu") || b.Contains("password") || (dangNhap && (ma == 401 || b.Contains("tài khoản"))))
+                return "sai mã số thuế hoặc mật khẩu. Kiểm tra lại trong Quản lý doanh nghiệp." + goc;
+            // Ngoài lúc đăng nhập, 401 = token hết hạn / không hợp lệ chứ không phải sai mật khẩu
+            if (ma == 401)
+                return "phiên đăng nhập Tổng cục Thuế đã hết hạn. Bấm Đồng bộ để đăng nhập lại.";
+
             return ma switch
             {
                 0      => "không kết nối được tới Tổng cục Thuế (mạng chập chờn hoặc hết thời gian chờ).",

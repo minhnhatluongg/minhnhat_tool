@@ -30,6 +30,7 @@ namespace minhnhat_tool
             // Mặc định: từ đầu tháng này -> hôm nay
             dpTuNgay.SelectedDate = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
             dpDenNgay.SelectedDate = DateTime.Today;
+            KhoiTaoKy();
             UpdateDnButton();
             pnlSkeleton.ItemsSource = Enumerable.Range(0, 9).ToList();   // 9 hàng khung xương khi đang tải
             var ver = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
@@ -448,39 +449,78 @@ namespace minhnhat_tool
         private void cboTrangThai_SelectionChanged(object sender, SelectionChangedEventArgs e) => ApplyFilter();
         private void cboLoaiCT_SelectionChanged(object sender, SelectionChangedEventArgs e) => ApplyFilter();
 
-        // ===== Kỳ kế toán -> tự set Từ ngày / Đến ngày =====
+        // ===== Kỳ kế toán =====
+        // Mỗi kỳ hiện đúng ô cần chọn: ngày -> Từ/Đến ngày; tháng -> Tháng + Năm; quý -> Quý + Năm; năm -> Năm.
+        // dpTuNgay/dpDenNgay luôn giữ khoảng ngày thật (mọi chỗ khác đọc ở đó); kỳ tháng/quý/năm chỉ điền vào
+        // rồi ẩn 2 ô ngày đi. Không còn khóa (disable) ô nào -> hết cảnh ô "Đến ngày" bị mờ đen khi quay về.
+        private bool _dangDatKy;   // code đang tự gán tháng/quý/năm -> bỏ qua sự kiện, tránh tính lại nhiều lần
+
+        private void KhoiTaoKy()
+        {
+            _dangDatKy = true;
+            for (int m = 1; m <= 12; m++) cboThang.Items.Add($"Tháng {m}");
+            cboQuy.Items.Add("Quý 1  (T1 – T3)");
+            cboQuy.Items.Add("Quý 2  (T4 – T6)");
+            cboQuy.Items.Add("Quý 3  (T7 – T9)");
+            cboQuy.Items.Add("Quý 4  (T10 – T12)");
+            // Hóa đơn điện tử bắt buộc toàn quốc từ 07/2022 -> từ 2020 là dư; năm mới nhất lên đầu
+            for (int y = DateTime.Today.Year; y >= 2020; y--) cboNam.Items.Add(y);
+            _dangDatKy = false;
+        }
+
         private void cboKy_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (dpTuNgay == null || dpDenNgay == null) return; // đang khởi tạo UI
-            var basis = dpTuNgay.SelectedDate ?? DateTime.Today;
+            if (dpTuNgay == null || pnlKyNgay == null || cboNam == null) return;   // đang khởi tạo UI
+            int ky = cboKy.SelectedIndex;   // 0 ngày, 1 tháng, 2 quý, 3 năm
+            pnlKyNgay.Visibility = ky == 0 ? Visibility.Visible : Visibility.Collapsed;
+            pnlKyKy.Visibility = ky == 0 ? Visibility.Collapsed : Visibility.Visible;
+            pnlChonThang.Visibility = ky == 1 ? Visibility.Visible : Visibility.Collapsed;
+            pnlChonQuy.Visibility = ky == 2 ? Visibility.Visible : Visibility.Collapsed;
+            if (ky == 0) return;   // quay về theo ngày: giữ nguyên khoảng ngày vừa có, cả 2 ô đều sửa được
+
+            // Lấy tháng/quý/năm theo Từ ngày đang chọn -> đổi kỳ không làm nhảy sang thời điểm khác
+            var goc = dpTuNgay.SelectedDate ?? DateTime.Today;
+            int nam = Math.Clamp(goc.Year, 2020, DateTime.Today.Year);
+            _dangDatKy = true;
+            cboThang.SelectedIndex = goc.Month - 1;
+            cboQuy.SelectedIndex = (goc.Month - 1) / 3;
+            cboNam.SelectedItem = nam;
+            _dangDatKy = false;
+            ApDungKy();
+        }
+
+        private void cboKyCon_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (!_dangDatKy) ApDungKy();
+        }
+
+        /// <summary>Tính khoảng ngày từ kỳ đang chọn, ghi vào 2 ô ngày + ô "Khoảng ngày".</summary>
+        private void ApDungKy()
+        {
+            if (cboNam.SelectedItem is not int nam) return;
+            DateTime tu, den;
             switch (cboKy.SelectedIndex)
             {
-                case 0: // Theo Ngày
-                    dpDenNgay.SelectedDate = dpTuNgay.SelectedDate ?? DateTime.Today;
-                    dpDenNgay.IsEnabled = false;
+                case 1:
+                    if (cboThang.SelectedIndex < 0) return;
+                    tu = new DateTime(nam, cboThang.SelectedIndex + 1, 1);
+                    den = tu.AddMonths(1).AddDays(-1);
                     break;
-                case 1: // Theo Tháng
-                    var f = new DateTime(basis.Year, basis.Month, 1);
-                    dpTuNgay.SelectedDate = f;
-                    dpDenNgay.SelectedDate = f.AddMonths(1).AddDays(-1);
-                    dpDenNgay.IsEnabled = false;
+                case 2:
+                    if (cboQuy.SelectedIndex < 0) return;
+                    tu = new DateTime(nam, cboQuy.SelectedIndex * 3 + 1, 1);
+                    den = tu.AddMonths(3).AddDays(-1);
                     break;
-                case 2: // Theo Quý
-                    int q = (basis.Month - 1) / 3;
-                    var qf = new DateTime(basis.Year, q * 3 + 1, 1);
-                    dpTuNgay.SelectedDate = qf;
-                    dpDenNgay.SelectedDate = qf.AddMonths(3).AddDays(-1);
-                    dpDenNgay.IsEnabled = false;
+                case 3:
+                    tu = new DateTime(nam, 1, 1);
+                    den = new DateTime(nam, 12, 31);
                     break;
-                case 3: // Theo Năm
-                    dpTuNgay.SelectedDate = new DateTime(basis.Year, 1, 1);
-                    dpDenNgay.SelectedDate = new DateTime(basis.Year, 12, 31);
-                    dpDenNgay.IsEnabled = false;
-                    break;
-                default: // Tùy Chọn -> tự chọn tự do
-                    dpDenNgay.IsEnabled = true;
-                    break;
+                default:
+                    return;
             }
+            dpTuNgay.SelectedDate = tu;
+            dpDenNgay.SelectedDate = den;
+            lblKhoangNgay.Text = $"{tu:dd/MM/yyyy}  –  {den:dd/MM/yyyy}";
         }
 
         // Chuột phải -> chọn dòng đó luôn (để context menu tác động đúng hóa đơn)
@@ -1083,6 +1123,7 @@ namespace minhnhat_tool
             barProgress.Value = 0;
             barProgress.Maximum = 1;
             lblProgressPhanTram.Text = indeterminate ? "Đang chờ Tổng cục Thuế..." : "";
+            lblProgressPhanTram.Foreground = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFromString("#22D3EE")!;
             overlayProgress.Visibility = Visibility.Visible;
             rectTaiLine.Visibility = Visibility.Visible;   // vạch chạy dưới dải tiêu đề bảng
             Sb("SbVachTai").Begin(this, true);
@@ -1124,6 +1165,20 @@ namespace minhnhat_tool
             else DatTrangThaiApp(_nhanDongBoCuoi, "#22C55E");
             _cts?.Dispose();
             _cts = null;
+        }
+
+        /// <summary>TCT treo / captcha sai -> client đang tự thử lại: hiện dòng màu hổ phách trên hộp tiến trình
+        /// để người dùng biết máy vẫn đang làm chứ không đứng. Chuỗi rỗng = đã qua, trả lại màu thường.</summary>
+        private void BaoDangCho(string thongDiep)
+        {
+            if (Cancelled) return;
+            var bc = new System.Windows.Media.BrushConverter();
+            bool dangCho = !string.IsNullOrEmpty(thongDiep);
+            lblProgressPhanTram.Text = dangCho ? thongDiep : "";
+            lblProgressPhanTram.Foreground = (System.Windows.Media.Brush)bc.ConvertFromString(dangCho ? "#FBBF24" : "#22D3EE")!;
+            lblProgressPhanTram.TextWrapping = TextWrapping.Wrap;
+            DatTrangThaiApp(dangCho ? "TCT phản hồi chậm, đang thử lại..." : lblProgressTieuDe.Text + "...",
+                            dangCho ? "#FBBF24" : "#22D3EE");
         }
 
         // Storyboard khai báo trong Window.Resources, bật/tắt từ code để chỉ chạy đúng lúc cần
@@ -1246,7 +1301,7 @@ namespace minhnhat_tool
             var all = new List<HoaDonInfo>();
             try
             {
-                _token = await _tct.LoginAsync(Session.Mst, Session.Password, Ct);
+                _token = await _tct.LoginAsync(Session.Mst, Session.Password, Ct, BaoDangCho);
                 _lastIsMuaVao = _loaiHD == "purchase";
                 _lastLoai = _loaiHD;
                 if (!Cancelled)
@@ -1268,7 +1323,7 @@ namespace minhnhat_tool
                     var part = await _tct.QueryInvoicesAsync(_token, _loaiHD,
                                    chunkStart.ToString("dd/MM/yyyy"), chunkEnd.ToString("dd/MM/yyyy"),
                                    (nguon, n) => { if (!Cancelled) txtProgress.Text = $"Bước 2/2  ·  Đang tải {nguon} tháng {thang}... (đã có {soFar + n:N0})"; },
-                                   Ct);
+                                   Ct, BaoDangCho);
                     all.AddRange(part);
                     if (!Cancelled) txtProgress.Text = $"Bước 2/2  ·  Đang tải hóa đơn {chieu}... (đã có {all.Count:N0})";
                     chunkStart = chunkEnd.AddDays(1);

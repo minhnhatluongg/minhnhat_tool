@@ -395,24 +395,56 @@
 
                         <StackPanel Margin="0,0,14,8" VerticalAlignment="Bottom">
                             <TextBlock Text="KỲ KẾ TOÁN" Style="{StaticResource Lbl}"/>
-                            <ComboBox x:Name="cboKy" Width="150" SelectedIndex="0"
+                            <ComboBox x:Name="cboKy" Width="140" SelectedIndex="0"
                                       SelectionChanged="cboKy_SelectionChanged">
-                                <ComboBoxItem>Theo Ngày</ComboBoxItem>
-                                <ComboBoxItem>Theo Tháng</ComboBoxItem>
-                                <ComboBoxItem>Theo Quý</ComboBoxItem>
-                                <ComboBoxItem>Theo Năm</ComboBoxItem>
-                                <ComboBoxItem>Tùy Chọn</ComboBoxItem>
+                                <ComboBoxItem>Theo ngày</ComboBoxItem>
+                                <ComboBoxItem>Theo tháng</ComboBoxItem>
+                                <ComboBoxItem>Theo quý</ComboBoxItem>
+                                <ComboBoxItem>Theo năm</ComboBoxItem>
                             </ComboBox>
                         </StackPanel>
 
-                        <StackPanel Margin="0,0,10,8" VerticalAlignment="Bottom">
-                            <TextBlock Text="TỪ NGÀY" Style="{StaticResource Lbl}"/>
-                            <DatePicker x:Name="dpTuNgay" Width="140"/>
+                        <!-- Kỳ "Theo ngày": chọn tự do Từ ngày – Đến ngày.
+                             Hai ô ngày này luôn là NGUỒN của khoảng ngày (đồng bộ, bảng kê, Excel đều đọc ở đây);
+                             các kỳ tháng/quý/năm chỉ tự điền vào chúng rồi ẩn chúng đi. -->
+                        <StackPanel x:Name="pnlKyNgay" Orientation="Horizontal">
+                            <StackPanel Margin="0,0,10,8" VerticalAlignment="Bottom">
+                                <TextBlock Text="TỪ NGÀY" Style="{StaticResource Lbl}"/>
+                                <DatePicker x:Name="dpTuNgay" Width="140"/>
+                            </StackPanel>
+                            <StackPanel Margin="0,0,14,8" VerticalAlignment="Bottom">
+                                <TextBlock Text="ĐẾN NGÀY" Style="{StaticResource Lbl}"/>
+                                <DatePicker x:Name="dpDenNgay" Width="140"/>
+                            </StackPanel>
                         </StackPanel>
 
-                        <StackPanel Margin="0,0,14,8" VerticalAlignment="Bottom">
-                            <TextBlock Text="ĐẾN NGÀY" Style="{StaticResource Lbl}"/>
-                            <DatePicker x:Name="dpDenNgay" Width="140"/>
+                        <!-- Kỳ tháng / quý / năm: chọn đúng đơn vị kỳ, kèm ô xem khoảng ngày sẽ đồng bộ -->
+                        <StackPanel x:Name="pnlKyKy" Orientation="Horizontal" Visibility="Collapsed">
+                            <StackPanel x:Name="pnlChonThang" Margin="0,0,10,8" VerticalAlignment="Bottom">
+                                <TextBlock Text="THÁNG" Style="{StaticResource Lbl}"/>
+                                <ComboBox x:Name="cboThang" Width="120" MaxDropDownHeight="420"
+                                          SelectionChanged="cboKyCon_SelectionChanged"/>
+                            </StackPanel>
+                            <StackPanel x:Name="pnlChonQuy" Margin="0,0,10,8" VerticalAlignment="Bottom">
+                                <TextBlock Text="QUÝ" Style="{StaticResource Lbl}"/>
+                                <ComboBox x:Name="cboQuy" Width="170" SelectionChanged="cboKyCon_SelectionChanged"/>
+                            </StackPanel>
+                            <StackPanel Margin="0,0,10,8" VerticalAlignment="Bottom">
+                                <TextBlock Text="NĂM" Style="{StaticResource Lbl}"/>
+                                <ComboBox x:Name="cboNam" Width="96" SelectionChanged="cboKyCon_SelectionChanged"/>
+                            </StackPanel>
+                            <StackPanel Margin="0,0,14,8" VerticalAlignment="Bottom">
+                                <TextBlock Text="KHOẢNG NGÀY" Style="{StaticResource Lbl}"/>
+                                <Border Height="36" Background="#0B1220" BorderBrush="#172033" BorderThickness="1"
+                                        CornerRadius="8" Padding="12,0" ToolTip="Khoảng ngày sẽ đồng bộ với Tổng cục Thuế">
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Path Style="{StaticResource IconNet}" Data="{StaticResource IcLich}"
+                                              Width="14" Height="14" Stroke="#64748B"/>
+                                        <TextBlock x:Name="lblKhoangNgay" Text="" Foreground="#94A3B8" FontSize="12.5"
+                                                   Margin="8,0,0,0" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
                         </StackPanel>
 
                         <StackPanel Margin="0,0,14,8" VerticalAlignment="Bottom">

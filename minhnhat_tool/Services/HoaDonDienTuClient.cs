@@ -67,14 +67,54 @@ namespace minhnhat_tool.Services
         }
 
         /// <summary>Đăng nhập hoadondientu (vượt captcha tự động) -> Bearer token.
+        /// Tự thử lại tối đa 3 lần khi captcha giải sai hoặc TCT/dịch vụ captcha treo, mỗi lần một captcha mới.
+        /// KHÔNG thử lại khi sai mật khẩu (thử lại dễ làm khóa tài khoản).
         /// Mọi thất bại ném TctException: Message là câu dễ hiểu, phản hồi thô nằm ở ChiTiet.</summary>
-        public async Task<string> LoginAsync(string username, string password, CancellationToken ct = default)
+        public async Task<string> LoginAsync(string username, string password, CancellationToken ct = default,
+                                             Action<string>? onCho = null)
         {
-            // 1) Nhờ dịch vụ decapcha lấy + giải captcha của TCT
+            const int SoLan = 3;
+            for (int lan = 1; lan < SoLan; lan++)
+            {
+                try { return await DangNhapMotLanAsync(username, password, ct); }
+                catch (TctException ex) when (NenThuLaiDangNhap(ex))
+                {
+                    bool capSai = LaLoiCaptcha(ex);
+                    onCho?.Invoke(capSai
+                        ? $"Captcha giải chưa đúng, đang thử lại với captcha mới (lần {lan + 1}/{SoLan})..."
+                        : $"Tổng cục Thuế phản hồi chậm, đang thử đăng nhập lại (lần {lan + 1}/{SoLan})...");
+                    await Task.Delay(capSai ? 500 : 2000 * lan, ct);
+                }
+            }
+            return await DangNhapMotLanAsync(username, password, ct);   // lần cuối: lỗi gì thì nổi lên nguyên vẹn
+        }
+
+        private static bool LaLoiCaptcha(TctException ex)
+        {
+            string s = (ex.Message + " " + ex.ChiTiet).ToLowerInvariant();
+            return s.Contains("captcha") || s.Contains("cvalue") || s.Contains("mã xác nhận");
+        }
+
+        private static bool NenThuLaiDangNhap(TctException ex)
+        {
+            // Xét captcha TRƯỚC: TCT trả 401 {"message":"Mã captcha không đúng."} (đã thử 20/10/2026),
+            // cùng mã 401 với sai mật khẩu -> chỉ nhìn mã là dừng nhầm.
+            if (LaLoiCaptcha(ex)) return true;
+            string s = (ex.Message + " " + ex.ChiTiet).ToLowerInvariant();
+            // Sai MST / mật khẩu -> dừng ngay, thử lại dễ làm khóa tài khoản
+            if (ex.MaLoi == 401 || s.Contains("mật khẩu") || s.Contains("password")) return false;
+            return ex.MaLoi == 0 || ex.MaLoi == 408 || ex.MaLoi == 429 || ex.MaLoi >= 500;
+        }
+
+        private async Task<string> DangNhapMotLanAsync(string username, string password, CancellationToken ct)
+        {
+            // 1) Nhờ dịch vụ decapcha lấy + giải captcha của TCT (giới hạn 45s, thường ~5s)
             CaptchaSolve? cap;
             try
             {
-                cap = await http.GetFromJsonAsync<CaptchaSolve>($"{DECAPTCHA}/captcha/solve", ct);
+                using var capCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                capCts.CancelAfter(TimeSpan.FromSeconds(45));
+                cap = await http.GetFromJsonAsync<CaptchaSolve>($"{DECAPTCHA}/captcha/solve", capCts.Token);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
             catch (Exception ex)   // lỗi mạng / hết thời gian chờ / dịch vụ trả lỗi
@@ -99,8 +139,11 @@ namespace minhnhat_tool.Services
             string json;
             try
             {
-                resp = await http.PostAsJsonAsync($"{HDDT}/security-taxpayer/authenticate", body, ct);
-                json = await resp.Content.ReadAsStringAsync(ct);
+                // TCT có lúc treo request 15-60s mà không trả lời -> cắt ở 30s để lần sau thử captcha mới
+                using var dnCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                dnCts.CancelAfter(TimeSpan.FromSeconds(30));
+                resp = await http.PostAsJsonAsync($"{HDDT}/security-taxpayer/authenticate", body, dnCts.Token);
+                json = await resp.Content.ReadAsStringAsync(dnCts.Token);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
             catch (Exception ex)
@@ -128,13 +171,14 @@ namespace minhnhat_tool.Services
         /// <summary>Cào hóa đơn theo loại: "purchase" = Mua vào (đầu vào), "sold" = Bán ra (đầu ra).
         /// Gộp CẢ HAI nguồn: hóa đơn điện tử thường (/query) và hóa đơn có mã khởi tạo từ máy tính tiền (/sco-query).</summary>
         public async Task<List<HoaDonInfo>> QueryInvoicesAsync(string token, string loai, string tuNgay, string denNgay,
-                                                               Action<string, int>? onProgress = null, CancellationToken ct = default)
+                                                               Action<string, int>? onProgress = null, CancellationToken ct = default,
+                                                               Action<string>? onCho = null)
         {
             var list = new List<HoaDonInfo>();
             // 1) Hóa đơn điện tử thường
-            list.AddRange(await QueryPagedAsync(token, "query", loai, tuNgay, denNgay, required: true, onProgress, baseCount: 0, ct));
+            list.AddRange(await QueryPagedAsync(token, "query", loai, tuNgay, denNgay, required: true, onProgress, baseCount: 0, ct, onCho));
             // 2) Hóa đơn có mã khởi tạo từ máy tính tiền (POS) — best-effort, không có thì bỏ qua
-            list.AddRange(await QueryPagedAsync(token, "sco-query", loai, tuNgay, denNgay, required: false, onProgress, baseCount: list.Count, ct));
+            list.AddRange(await QueryPagedAsync(token, "sco-query", loai, tuNgay, denNgay, required: false, onProgress, baseCount: list.Count, ct, onCho));
 
             // Khử trùng lặp theo (MST bán + ký hiệu + số + mẫu số)
             var seen = new HashSet<string>();
@@ -148,9 +192,16 @@ namespace minhnhat_tool.Services
         // Tải 1 nguồn, tự PHÂN TRANG theo con trỏ "state" (TCT trả tối đa 50 dòng/lần).
         // Có THỬ LẠI khi TCT chặn tạm thời (429/5xx) để KHÔNG trả về THIẾU hóa đơn.
         // onProgress: báo tổng số HĐ đã tải (baseCount + số của nguồn này) sau mỗi trang.
+        // Lịch thử lại 1 trang khi TCT treo / chặn tạm. Đo thực tế (20/10/2026): đa số request trả lời ~0,15s,
+        // nhưng cứ vài request lại có 1 cái bị TCT GIỮ 14-60s+ không trả lời; gửi >5 request/giây thì bị 429.
+        // -> Lần đầu cắt sớm (20s) để thoát nhanh khỏi request bị treo (request mới gần như luôn nhanh);
+        //    các lần sau kiên nhẫn dần phòng TCT chậm thật; nghỉ giãn dần giữa các lần. Tổng tối đa ~4,5 phút.
+        private static readonly int[] TimeoutTrangGiay = { 20, 25, 35, 45, 60, 60 };
+        private static readonly int[] NghiTruocLanGiay = { 0, 1, 2, 4, 7, 10 };
+
         private async Task<List<HoaDonInfo>> QueryPagedAsync(string token, string prefix, string loai, string tuNgay,
                                                              string denNgay, bool required, Action<string, int>? onProgress, int baseCount,
-                                                             CancellationToken ct = default)
+                                                             CancellationToken ct = default, Action<string>? onCho = null)
         {
             string nguon = prefix == "sco-query" ? "hóa đơn máy tính tiền" : "hóa đơn thường";
             var list = new List<HoaDonInfo>();
@@ -165,29 +216,67 @@ namespace minhnhat_tool.Services
                 string url = $"{HDDT}/{prefix}/invoices/{loai}?sort=tdlap:desc&size=50&search={Uri.EscapeDataString(search)}";
                 if (!string.IsNullOrEmpty(state)) url += $"&state={Uri.EscapeDataString(state)}";
 
-                // Thử lại tối đa 5 lần (giãn dần) vì TCT hay chặn khi phân trang liên tục.
-                // Mỗi lần có TIMEOUT RIÊNG 30s -> request treo không kéo dài 100s (mặc định) làm "đứng".
+                // Thử lại theo lịch TimeoutTrangGiay / NghiTruocLanGiay. Mỗi lần ghi lại lý do để nếu
+                // hỏng hẳn thì phần "Chi tiết kỹ thuật" nói rõ TCT treo, chặn 429 hay lỗi kết nối.
                 HttpResponseMessage? resp = null;
                 string json = "";
-                for (int attempt = 0; attempt < 5; attempt++)
+                var nhatKy = new List<string>();
+                string lyDoCuoi = "";
+                var dongHo = System.Diagnostics.Stopwatch.StartNew();
+                int soLan = TimeoutTrangGiay.Length;
+                for (int attempt = 0; attempt < soLan; attempt++)
                 {
-                    if (attempt > 0) await Task.Delay(700 * attempt, ct);
+                    if (attempt > 0)
+                    {
+                        int nghi = NghiTruocLanGiay[attempt];
+                        // 429: TCT bảo gửi chậm lại -> nghỉ ít nhất 3s (hoặc theo Retry-After nếu có)
+                        if (resp != null && (int)resp.StatusCode == 429)
+                            nghi = Math.Max(nghi, (int)Math.Min(30, resp.Headers.RetryAfter?.Delta?.TotalSeconds ?? 3));
+                        onCho?.Invoke($"Tổng cục Thuế phản hồi chậm ({lyDoCuoi}). Thử lại lần {attempt + 1}/{soLan}" +
+                                      (nghi > 0 ? $" sau {nghi} giây..." : "..."));
+                        if (nghi > 0) await Task.Delay(TimeSpan.FromSeconds(nghi), ct);
+                    }
+                    var t0 = dongHo.Elapsed;
                     try
                     {
                         using var reqCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                        reqCts.CancelAfter(TimeSpan.FromSeconds(30));
+                        reqCts.CancelAfter(TimeSpan.FromSeconds(TimeoutTrangGiay[attempt]));
                         var req = new HttpRequestMessage(HttpMethod.Get, url);
                         req.Headers.Add("Authorization", "Bearer " + token);
                         resp = await http.SendAsync(req, reqCts.Token);
                         json = await resp.Content.ReadAsStringAsync(reqCts.Token);
+                        int ma = (int)resp.StatusCode;
                         // TCT thỉnh thoảng trả 200 kèm TRANG HTML (bảo trì / cổng chặn) thay vì JSON
                         // -> coi như 1 lần trượt, thử lại; tuyệt đối không đem HTML đi parse.
                         if (resp.IsSuccessStatusCode && TctException.LaJson(json)) break;
+                        lyDoCuoi = resp.IsSuccessStatusCode ? "trả về trang web thay vì dữ liệu"
+                                 : ma == 429 ? "đang giới hạn tần suất" : $"lỗi HTTP {ma}";
+                        nhatKy.Add(resp.IsSuccessStatusCode ? $"HTTP {ma} nhưng không phải JSON"
+                                 : ma == 429 ? "HTTP 429 - gửi quá nhanh" : $"HTTP {ma}");
+                        // Lỗi "cứng" (400/401/404...): thử lại không đổi được kết quả -> dừng ngay
+                        bool tamThoi = !resp.IsSuccessStatusCode && (ma == 403 || ma == 408 || ma == 429 || ma >= 500);
+                        if (!resp.IsSuccessStatusCode && !tamThoi) break;
                     }
                     catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }  // Hủy thật -> nổi lên
-                    catch (OperationCanceledException) { resp = null; }   // quá 30s -> coi như 1 lần trượt, thử lại
-                    catch (HttpRequestException) { resp = null; }         // lỗi mạng -> thử lại
+                    catch (OperationCanceledException)
+                    {
+                        resp = null;
+                        lyDoCuoi = $"quá {TimeoutTrangGiay[attempt]} giây không trả lời";
+                        nhatKy.Add($"treo, quá {TimeoutTrangGiay[attempt]} giây không trả lời");
+                    }
+                    catch (HttpRequestException ex)
+                    {
+                        resp = null;
+                        lyDoCuoi = "lỗi kết nối";
+                        nhatKy.Add("lỗi kết nối: " + (ex.InnerException?.Message ?? ex.Message));
+                    }
+                    finally
+                    {
+                        if (nhatKy.Count > 0 && nhatKy.Count == attempt + 1)
+                            nhatKy[^1] = $"{nhatKy[^1]}  [{(dongHo.Elapsed - t0).TotalSeconds:0.0}s]";
+                    }
                 }
+                if (nhatKy.Count > 0) onCho?.Invoke("");   // đã qua (hoặc đã thôi thử) -> xóa dòng "đang thử lại"
 
                 bool khongPhaiJson = resp != null && resp.IsSuccessStatusCode && !TctException.LaJson(json);
                 if (resp == null || !resp.IsSuccessStatusCode || khongPhaiJson)
@@ -197,11 +286,20 @@ namespace minhnhat_tool.Services
                     // Trang ĐẦU nguồn POS lỗi KHÔNG do chặn (vd 400/404: tài khoản không có nguồn này) -> bỏ qua êm.
                     if (!required && firstPage && !transient) return list;
                     // Còn lại (đang phân trang dở, hoặc bị chặn tạm thời): KHÔNG im lặng cắt bớt (sẽ THIẾU hóa đơn) -> báo lỗi để đồng bộ lại.
+                    string nl = Environment.NewLine;
+                    string bangKy = $"Tháng {tuNgay} – {denNgay}, trang {guard + 1}, {nhatKy.Count} lần thử trong " +
+                                    $"{dongHo.Elapsed.TotalSeconds:0} giây:" + nl +
+                                    string.Join(nl, nhatKy.Select((s, i) => $"  Lần {i + 1}: {s}")) + nl + "URL: " + url;
                     if (khongPhaiJson)
                         throw TctException.KhongPhaiJson($"Không tải hết {nguon}, hãy bấm Đồng bộ lại", code,
                                                          resp!.Content.Headers.ContentType?.ToString() ?? "(không có)",
-                                                         resp.RequestMessage?.RequestUri?.ToString() ?? url, json);
-                    throw TctException.TuPhanHoi($"Không tải hết {nguon}, hãy bấm Đồng bộ lại", code, json);
+                                                         resp.RequestMessage?.RequestUri?.ToString() ?? url, json).KemNhatKy(bangKy);
+                    if (code == 0)
+                        throw new TctException(
+                            $"Không tải hết {nguon}: Tổng cục Thuế không trả lời sau {nhatKy.Count} lần thử " +
+                            $"(khoảng {Math.Max(1, (int)Math.Round(dongHo.Elapsed.TotalMinutes))} phút). Hệ thống thuế đang quá tải, " +
+                            "đợi vài phút rồi bấm Đồng bộ lại.", 0, bangKy);
+                    throw TctException.TuPhanHoi($"Không tải hết {nguon}, hãy bấm Đồng bộ lại", code, json).KemNhatKy(bangKy);
                 }
 
                 int truoc = list.Count;
@@ -228,7 +326,7 @@ namespace minhnhat_tool.Services
                 // -> tránh "đứng ở N" khi TCT trả trang lặp cho nguồn máy tính tiền.
                 if (list.Count == truoc) { if (++khongThem >= 2) break; }
                 else khongThem = 0;
-                if (!string.IsNullOrEmpty(state)) await Task.Delay(200, ct);   // giãn nhẹ giữa các trang để đỡ bị chặn
+                if (!string.IsNullOrEmpty(state)) await Task.Delay(300, ct);   // giãn giữa các trang: TCT chặn 429 khi >5 request/giây
             }
             while (!string.IsNullOrEmpty(state) && ++guard < 200);
             return list;
